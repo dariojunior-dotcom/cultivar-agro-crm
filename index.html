@@ -7,14 +7,14 @@ async function carregarPainelReal(){
  sb.from('clientes').select('id,vendedor_id,nome'),
  sb.from('fazendas').select('id,vendedor_id'),
  sb.from('visitas').select('id,vendedor_id'),
- user==='gestor'?sb.from('profiles').select('id,nome,papel,ativo'):Promise.resolve({data:[],error:null})
+ user==='gestor'?sb.from('profiles').select('*'):Promise.resolve({data:[],error:null})
  ]);
  painelDados.carregando=false;
  const error=c.error||f.error||v.error||p.error;
  if(error){painelDados.erro=error.message; painelDados.clientes=0;painelDados.fazendas=0;painelDados.visitas=0;painelDados.porVendedor=[]}
  else {
  painelDados.clientes=(c.data||[]).length;painelDados.fazendas=(f.data||[]).length;painelDados.visitas=(v.data||[]).length;
- painelDados.porVendedor=(p.data||[]).filter(x=>x.papel==='vendedor'&&x.ativo).map(x=>({nome:x.nome||'Vendedor',clientes:(c.data||[]).filter(y=>y.vendedor_id===x.id).length,visitas:(v.data||[]).filter(y=>y.vendedor_id===x.id).length}));
+ painelDados.porVendedor=(p.data||[]).filter(x=>['vendedor','seller'].includes(String(x.papel||x.role||x.tipo||'').toLowerCase())&&x.ativo!==false&&x.active!==false).map(x=>({nome:x.nome||x.name||'Vendedor',clientes:(c.data||[]).filter(y=>y.vendedor_id===x.id).length,visitas:(v.data||[]).filter(y=>y.vendedor_id===x.id).length}));
  }
  if(tab==='dashboard')render();
 }
@@ -215,7 +215,7 @@ async function loginReal(event){
 async function showAuthenticated(account){
  if(!account){return}
  // Access is based on the authenticated Supabase user, not on a profile dropdown.
- // This is still a local demonstration; role and database RLS must be implemented before production.
+ // Roles are read from Supabase profiles; RLS must also be verified on the database before production.
  user='v1';
  try{
   const {data,error}=await sb.from('profiles').select('*').eq('id',account.id).maybeSingle();
@@ -231,7 +231,7 @@ async function showAuthenticated(account){
  document.getElementById('app').classList.remove('hidden');
  document.getElementById('identity').textContent=account.email;
  tab='dashboard';render();carregarPainelReal();
- document.getElementById('identity').textContent=account.email+' • '+(user==='gestor'?'Gestor':'Vendedor (demo)');
+ document.getElementById('identity').textContent=account.email+' • '+(user==='gestor'?'Gestor':'Vendedor');
 }
 (async()=>{if(!sb){authMessage.textContent='Biblioteca Supabase indisponível';return}const {data}=await sb.auth.getUser();if(data?.user){try{await showAuthenticated(data.user)}catch(e){authMessage.textContent=e.message}}})();
 </script></body></html>
