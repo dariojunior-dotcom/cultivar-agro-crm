@@ -98,25 +98,64 @@ async function abrirFotosVisita(id){
  window.open(data.signedUrl,'_blank','noopener');
  }
 }
-let oportunidadesReais=[],oportunidadesCarregando=false,oportunidadesErro='';
+let oportunidadesReais=[],oportunidadesClientes=[],oportunidadesEquipe=[],oportunidadesCarregando=false,oportunidadesErro='';
 async function carregarOportunidadesReais(){
  if(!sb||!perfilAtual)return;
  oportunidadesCarregando=true;oportunidadesErro='';if(tab==='negocios')render();
  try{
-  const {data,error}=await sb.from('oportunidades').select('*').limit(200);
-  if(error)throw error;
-  oportunidadesReais=data||[];
+  const requests=[sb.from('oportunidades').select('*').order('criado_em',{ascending:false}).limit(200),sb.from('clientes').select('id,nome,vendedor_id').order('nome')];
+  if(user==='gestor')requests.push(sb.from('profiles').select('*'));
+  const results=await Promise.all(requests);
+  for(const r of results)if(r.error)throw r.error;
+  oportunidadesReais=results[0].data||[];
+  oportunidadesClientes=results[1].data||[];
+  oportunidadesEquipe=user==='gestor'?(results[2].data||[]).filter(x=>x.ativo!==false&&x.active!==false):[];
  }catch(e){oportunidadesErro=e.message||String(e);oportunidadesReais=[]}
  finally{oportunidadesCarregando=false;if(tab==='negocios')render()}
 }
+async function salvarOportunidadeReal(event){
+ event.preventDefault();
+ const form=event.target,button=form.querySelector('button[type=submit]');
+ button.disabled=true;
+ try{
+  const f=new FormData(form),cliente_id=String(f.get('cliente_id')||''),cliente=oportunidadesClientes.find(x=>x.id===cliente_id);
+  if(!cliente)throw Error('Selecione um produtor válido.');
+  const vendedor_id=user==='gestor'?String(f.get('vendedor_id')||''):perfilAtual.id;
+  if(!vendedor_id)throw Error('Selecione o responsável.');
+  if(user!=='gestor'&&cliente.vendedor_id!==perfilAtual.id)throw Error('Produtor fora da sua carteira.');
+  const produto=String(f.get('produto')||'').trim();
+  const valor_estimado=Number(f.get('valor_estimado')),probabilidade=Number(f.get('probabilidade'));
+  if(!produto||!Number.isFinite(valor_estimado)||valor_estimado<=0)throw Error('Informe produto e valor maior que zero.');
+  if(!Number.isInteger(probabilidade)||probabilidade<0||probabilidade>100)throw Error('Probabilidade deve estar entre 0 e 100.');
+  const payload={cliente_id,vendedor_id,produto,valor_estimado,probabilidade,etapa:String(f.get('etapa')||'Prospecção')};
+  for(const k of ['categoria','safra','previsao_fechamento']){const v=String(f.get(k)||'').trim();if(v)payload[k]=v}
+  const {error}=await sb.from('oportunidades').insert(payload);
+  if(error)throw error;
+  form.reset();await carregarOportunidadesReais();alert('Oportunidade salva no Supabase.');
+ }catch(e){alert('Não foi possível salvar: '+(e.message||e))}
+ finally{button.disabled=false}
+}
 function negocios(){
- const fmt=v=>v===null||v===undefined?'—':esc(String(v));
- const columns=[['cliente','Cliente'],['produto','Produto'],['categoria','Categoria'],['valor','Valor (R$)'],['etapa','Etapa'],['status','Status'],['previsao','Previsão'],['data_prevista','Data prevista']];
- const present=columns.filter(([k])=>oportunidadesReais.some(x=>Object.prototype.hasOwnProperty.call(x,k)));
- return '<h2>Oportunidades — Supabase</h2><div class="notice">Consulta aos registros reais do banco. O cadastro e a edição de oportunidades serão liberados após validar os campos e as permissões de acesso.</div>'+
- (oportunidadesCarregando?'<div class="panel">Carregando oportunidades...</div>':oportunidadesErro?'<div class="panel">Não foi possível consultar oportunidades: '+esc(oportunidadesErro)+'</div>':
- '<div class="panel"><h3>Oportunidades encontradas: '+oportunidadesReais.length+'</h3>'+
- (oportunidadesReais.length?'<div style="overflow-x:auto"><table><tr>'+present.map(x=>'<th>'+x[1]+'</th>').join('')+'</tr>'+oportunidadesReais.map(x=>'<tr>'+present.map(([k])=>'<td>'+fmt(x[k])+'</td>').join('')+'</tr>').join('')+'</table></div>':'<p>Nenhuma oportunidade cadastrada ou visível para este usuário.</p>')+'</div>');
+ const nomeCliente=id=>oportunidadesClientes.find(x=>x.id===id)?.nome||id;
+ const nomeResponsavel=id=>oportunidadesEquipe.find(x=>x.id===id)?.nome|| (id===perfilAtual?.id?'Meu usuário':id);
+ const opcoesClientes=oportunidadesClientes.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.nome)+'</option>').join('');
+ const opcoesEquipe=oportunidadesEquipe.filter(x=>['vendedor','seller','gestor','admin'].includes(String(x.papel||x.role||x.tipo||'').toLowerCase())).map(x=>'<option value="'+esc(x.id)+'">'+esc(x.nome||x.name||x.id)+'</option>').join('');
+ const formulario='<div class="panel"><h3>Nova oportunidade</h3><form onsubmit="salvarOportunidadeReal(event)"><div class="fields">'+
+ '<div class="field"><label>Produtor</label><select name="cliente_id" required><option value="">Selecione</option>'+opcoesClientes+'</select></div>'+
+ (user==='gestor'?'<div class="field"><label>Responsável</label><select name="vendedor_id" required><option value="">Selecione</option>'+opcoesEquipe+'</select></div>':'')+
+ '<div class="field"><label>Produto</label><input name="produto" required maxlength="150"></div>'+
+ '<div class="field"><label>Categoria</label><select name="categoria"><option value="">Selecione</option><option>Defensivos</option><option>Fertilizantes</option><option>Sementes</option><option>Biológicos</option><option>Outros</option></select></div>'+
+ '<div class="field"><label>Safra</label><input name="safra" placeholder="2026/27"></div>'+
+ '<div class="field"><label>Valor estimado (R$)</label><input name="valor_estimado" type="number" min="0.01" step="0.01" required></div>'+
+ '<div class="field"><label>Probabilidade (%)</label><input name="probabilidade" type="number" min="0" max="100" step="1" value="50" required></div>'+
+ '<div class="field"><label>Etapa</label><select name="etapa"><option>Prospecção</option><option>Negociação</option><option>Proposta</option><option>Ganha</option><option>Perdida</option></select></div>'+
+ '<div class="field"><label>Previsão de fechamento</label><input name="previsao_fechamento" type="date"></div>'+
+ '</div><div class="actions"><button type="submit">Salvar oportunidade</button></div></form></div>';
+ const linhas=oportunidadesReais.map(x=>'<tr><td>'+esc(nomeCliente(x.cliente_id))+'</td><td>'+esc(x.produto||'')+'</td><td>'+money(Number(x.valor_estimado||0))+'</td><td>'+esc(x.etapa||'')+'</td><td>'+esc(String(x.probabilidade??0))+'%</td><td>'+esc(x.previsao_fechamento||'—')+'</td><td>'+esc(nomeResponsavel(x.vendedor_id))+'</td></tr>').join('');
+ return '<h2>Oportunidades — Supabase</h2>'+
+ (oportunidadesCarregando?'<div class="panel">Carregando...</div>':oportunidadesErro?'<div class="panel">Erro ao consultar: '+esc(oportunidadesErro)+'</div>':
+ formulario+'<div class="panel"><h3>Oportunidades encontradas: '+oportunidadesReais.length+'</h3>'+
+ (oportunidadesReais.length?'<div style="overflow-x:auto"><table><tr><th>Produtor</th><th>Produto</th><th>Valor</th><th>Etapa</th><th>Probabilidade</th><th>Previsão</th><th>Responsável</th></tr>'+linhas+'</table></div>':'<p>Nenhuma oportunidade cadastrada ou visível para este usuário.</p>')+'</div>');
 }
 function metas(){return `<h2>Metas e participação na carteira</h2>${user==='gestor'?`<div class="panel"><h3>Definir metas por vendedor</h3><form onsubmit="updateGoals(event)"><div class="fields">${Object.keys(db.goals).map(k=>field(names[k],k,'number',`min="0" value="${db.goals[k]}"`)).join('')}</div><div class="actions"><button>Atualizar metas</button></div></form></div>`:''}<div class="panel"><h3>Share por propriedade</h3><table><tr><th>Fazenda</th><th>Potencial</th><th>Vendas ganhas</th><th>Share estimado</th><th>Potencial não capturado</th></tr>${clients().map(c=>{let w=db.deals.filter(d=>d.cliente==c.id&&d.etapa==='Ganha').reduce((s,x)=>s+Number(x.valor),0);return `<tr><td>${esc(c.nome)}</td><td>${money(c.potencial)}</td><td>${money(w)}</td><td>${c.potencial?(100*w/c.potencial).toFixed(1):0}%</td><td>${money(Math.max(0,c.potencial-w))}</td></tr>`}).join('')}</table></div>`}function dados(){return `<h2>Exportação e manutenção</h2><div class="panel"><p>Exporte registros para CSV ou um backup JSON. Tudo é armazenado neste dispositivo; não existe sincronização entre celulares.</p><div class="actions"><button onclick="csv('clients')">Exportar produtores CSV</button><button onclick="csv('visits')">Exportar visitas CSV</button><button onclick="csv('deals')">Exportar oportunidades CSV</button><button onclick="backup()">Backup JSON</button></div>${user==='gestor'?'<button class="danger" onclick="reset()">Restaurar dados demonstrativos</button>':''}</div>`}function add(e,k){e.preventDefault();const d=Object.fromEntries(new FormData(e.target));if(!d.vendedor||!names[d.vendedor]||d.vendedor==='gestor')return alert('Vendedor inválido');if(user!=='gestor')d.vendedor=user;if(k!=='clients'&&!clients().some(c=>c.id==d.cliente))return alert('Cliente inválido');for(let f of ['cliente','hectares','potencial','valor','lat','lng'])if(d[f]!==undefined)d[f]=Number(d[f]);d.id=Math.max(0,...db[k].map(x=>x.id))+1;db[k].push(d);save();render()}function remove(k,id){const item=db[k].find(x=>x.id===id);if(!item||!visible(item))return;if(k==='clients'&&(db.deals.some(x=>x.cliente===id)||db.visits.some(x=>x.cliente===id)))return alert('Exclua primeiro as visitas e oportunidades vinculadas.');if(confirm('Excluir este registro?')){db[k]=db[k].filter(x=>x.id!==id);save();render()}}function updateGoals(e){e.preventDefault();for(const [k,v] of new FormData(e.target))db.goals[k]=Math.max(0,Number(v));save();render()}
 function captureGPS(btn){const form=btn.closest('form'),status=form.querySelector('#gpsStatus');if(!navigator.geolocation){status.textContent='GPS indisponível neste navegador';return}status.textContent='Aguardando permissão...';navigator.geolocation.getCurrentPosition(pos=>{form.elements.lat.value=pos.coords.latitude.toFixed(6);form.elements.lng.value=pos.coords.longitude.toFixed(6);status.textContent='Localização registrada (precisão ~'+Math.round(pos.coords.accuracy)+' m)'},err=>{status.textContent='Não foi possível obter localização: '+err.message},{enableHighAccuracy:true,timeout:15000,maximumAge:0})}
