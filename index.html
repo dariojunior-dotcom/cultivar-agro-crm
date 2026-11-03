@@ -120,8 +120,8 @@ async function salvarOportunidadeReal(event){
  try{
   const f=new FormData(form),cliente_id=String(f.get('cliente_id')||''),cliente=oportunidadesClientes.find(x=>x.id===cliente_id);
   if(!cliente)throw Error('Selecione um produtor válido.');
-  const vendedor_id=user==='gestor'?String(f.get('vendedor_id')||''):perfilAtual.id;
-  if(!vendedor_id)throw Error('Selecione o responsável.');
+  const vendedor_id=cliente.vendedor_id;
+  if(!vendedor_id)throw Error('Produtor sem vendedor responsável.');
   if(user!=='gestor'&&cliente.vendedor_id!==perfilAtual.id)throw Error('Produtor fora da sua carteira.');
   const produto=String(f.get('produto')||'').trim();
   const valor_estimado=Number(f.get('valor_estimado')),probabilidade=Number(f.get('probabilidade'));
@@ -142,7 +142,7 @@ function negocios(){
  const opcoesEquipe=oportunidadesEquipe.filter(x=>['vendedor','seller','gestor','admin'].includes(String(x.papel||x.role||x.tipo||'').toLowerCase())).map(x=>'<option value="'+esc(x.id)+'">'+esc(x.nome||x.name||x.id)+'</option>').join('');
  const formulario='<div class="panel"><h3>Nova oportunidade</h3><form onsubmit="salvarOportunidadeReal(event)"><div class="fields">'+
  '<div class="field"><label>Produtor</label><select name="cliente_id" required><option value="">Selecione</option>'+opcoesClientes+'</select></div>'+
- (user==='gestor'?'<div class="field"><label>Responsável</label><select name="vendedor_id" required><option value="">Selecione</option>'+opcoesEquipe+'</select></div>':'')+
+ '<div class="field"><label>Responsável</label><input readonly placeholder="Definido automaticamente pelo produtor"></div>'+
  '<div class="field"><label>Produto</label><input name="produto" required maxlength="150"></div>'+
  '<div class="field"><label>Categoria</label><select name="categoria"><option value="">Selecione</option><option>Defensivos</option><option>Fertilizantes</option><option>Sementes</option><option>Biológicos</option><option>Outros</option></select></div>'+
  '<div class="field"><label>Safra</label><input name="safra" placeholder="2026/27"></div>'+
