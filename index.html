@@ -127,7 +127,7 @@ async function salvarOportunidadeReal(event){
   const valor_estimado=Number(f.get('valor_estimado')),probabilidade=Number(f.get('probabilidade'));
   if(!produto||!Number.isFinite(valor_estimado)||valor_estimado<=0)throw Error('Informe produto e valor maior que zero.');
   if(!Number.isInteger(probabilidade)||probabilidade<0||probabilidade>100)throw Error('Probabilidade deve estar entre 0 e 100.');
-  const payload={cliente_id,vendedor_id,produto,valor_estimado,probabilidade,etapa:String(f.get('etapa')||'Prospecção')};
+  const payload={cliente_id,vendedor_id,produto,valor_estimado,probabilidade,etapa:String(f.get('etapa')||'prospeccao')};
   for(const k of ['categoria','safra','previsao_fechamento']){const v=String(f.get(k)||'').trim();if(v)payload[k]=v}
   const {error}=await sb.from('oportunidades').insert(payload);
   if(error)throw error;
@@ -148,7 +148,7 @@ function negocios(){
  '<div class="field"><label>Safra</label><input name="safra" placeholder="2026/27"></div>'+
  '<div class="field"><label>Valor estimado (R$)</label><input name="valor_estimado" type="number" min="0.01" step="0.01" required></div>'+
  '<div class="field"><label>Probabilidade (%)</label><input name="probabilidade" type="number" min="0" max="100" step="1" value="50" required></div>'+
- '<div class="field"><label>Etapa</label><select name="etapa"><option>Prospecção</option><option>Negociação</option><option>Proposta</option><option>Ganha</option><option>Perdida</option></select></div>'+
+ '<div class="field"><label>Etapa</label><select name="etapa"><option value="prospeccao">Prospecção</option><option value="negociacao">Negociação</option><option value="proposta">Proposta</option></select></div>'+
  '<div class="field"><label>Previsão de fechamento</label><input name="previsao_fechamento" type="date"></div>'+
  '</div><div class="actions"><button type="submit">Salvar oportunidade</button></div></form></div>';
  const linhas=oportunidadesReais.map(x=>'<tr><td>'+esc(nomeCliente(x.cliente_id))+'</td><td>'+esc(x.produto||'')+'</td><td>'+money(Number(x.valor_estimado||0))+'</td><td>'+esc(x.etapa||'')+'</td><td>'+esc(String(x.probabilidade??0))+'%</td><td>'+esc(x.previsao_fechamento||'—')+'</td><td>'+esc(nomeResponsavel(x.vendedor_id))+'</td></tr>').join('');
