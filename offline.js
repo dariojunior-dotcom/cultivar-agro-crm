@@ -1,0 +1,47 @@
+/* Cultivar Agro offline queue. IndexedDB is device-local, not encrypted; only use on trusted devices. */
+(function(){
+ const DB='cultivar-offline-v1', STORE='items';
+ function database(){return new Promise((resolve,reject)=>{const q=indexedDB.open(DB,1);q.onupgradeneeded=()=>{const d=q.result;if(!d.objectStoreNames.contains(STORE))d.createObjectStore(STORE,{keyPath:'id'})};q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)})}
+ async function run(mode,fn){const db=await database();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,mode),store=tx.objectStore(STORE);let result;try{result=fn(store)}catch(e){db.close();reject(e);return}tx.oncomplete=()=>{db.close();resolve(result)};tx.onerror=()=>{db.close();reject(tx.error)};tx.onabort=()=>{db.close();reject(tx.error)}})}
+ async function all(){const db=await database();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readonly');const q=tx.objectStore(STORE).getAll();q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);tx.oncomplete=()=>db.close()})}
+ async function enqueue(type,owner,payload,files=[]){const item={id:crypto.randomUUID(),type,owner,payload,files:Array.from(files),created:new Date().toISOString()};await run('readwrite',store=>store.put(item));return item}
+ async function remove(id){await run('readwrite',store=>store.delete(id))}
+ async function pending(owner){return (await all()).filter(x=>x.owner===owner)}
+ let busy=false;
+ async function sync(sb,owner){
+  if(busy||!navigator.onLine||!sb||!owner)return {busy:true};
+  busy=true;let sent=0,failed=[];
+  try{
+   const {data:{user},error:authError}=await sb.auth.getUser();if(authError||!user||user.id!==owner)throw Error('Entre novamente para sincronizar.');
+   for(const item of await pending(owner)){
+    try{
+     if(item.type==='oportunidade'){
+      // Stable client-generated UUID ensures safe retries after an uncertain network response.
+      const {data:existing,error:lookupError}=await sb.from('oportunidades').select('id').eq('id',item.id).maybeSingle();
+      if(lookupError)throw lookupError;
+      if(!existing){const {error}=await sb.from('oportunidades').insert({...item.payload,id:item.id});if(error)throw error}
+     }else if(item.type==='visita'){
+      const {data:existing,error:lookupError}=await sb.from('visitas').select('id').eq('id',item.id).maybeSingle();
+      if(lookupError)throw lookupError;
+      if(!existing){const {error}=await sb.from('visitas').insert({...item.payload,id:item.id});if(error)throw error}
+      for(let n=0;n<item.files.length;n++){
+       const file=item.files[n],ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').slice(0,8)||'jpg';
+       const path=owner+'/'+item.id+'/'+item.id+'-'+n+'.'+ext;
+       const {data:meta,error:metaErr}=await sb.from('visitas_fotos').select('id').eq('caminho_arquivo',path).maybeSingle();
+       if(metaErr)throw metaErr;
+       if(!meta){
+        const {error:uploadErr}=await sb.storage.from('fotos-visitas').upload(path,file,{contentType:file.type,upsert:false});
+        if(uploadErr&&!/already exists|duplicate/i.test(uploadErr.message||''))throw uploadErr;
+        const {error:insertErr}=await sb.from('visitas_fotos').insert({visita_id:item.id,vendedor_id:item.payload.vendedor_id,caminho_arquivo:path});
+        if(insertErr)throw insertErr;
+       }
+      }
+     }else throw Error('Tipo de registro desconhecido.');
+     await remove(item.id);sent++;
+    }catch(e){failed.push({id:item.id,error:e.message||String(e)})}
+   }
+   return {sent,failed};
+  }finally{busy=false}
+ }
+ window.CultivarOffline={enqueue,pending,sync};
+})();
