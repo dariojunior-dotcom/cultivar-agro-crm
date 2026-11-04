@@ -18,22 +18,31 @@ async function carregarPainelReal(){
   painelDados.clientes=(c.data||[]).length;painelDados.fazendas=(f.data||[]).length;painelDados.visitas=(v.data||[]).length;
   painelDados.vendas=vd.data||[];painelDados.metas=m.data||[];painelDados.oportunidades=o.data||[];
   const equipe=(p.data||[]).filter(x=>['vendedor','seller'].includes(String(x.papel||x.role||x.tipo||'').toLowerCase())&&x.ativo!==false&&x.active!==false);
-  painelDados.porVendedor=equipe.map(x=>({nome:x.nome||x.name||'Vendedor',clientes:(c.data||[]).filter(y=>y.vendedor_id===x.id).length,visitas:(v.data||[]).filter(y=>y.vendedor_id===x.id).length,vendas:painelDados.vendas.filter(y=>y.vendedor_id===x.id).reduce((a,y)=>a+Number(y.valor||0),0),metas:painelDados.metas.filter(y=>y.vendedor_id===x.id).reduce((a,y)=>a+Number(y.valor||0),0)}));
+  painelDados.porVendedor=equipe.map(x=>({id:x.id,nome:x.nome||x.name||'Vendedor',clientes:(c.data||[]).filter(y=>y.vendedor_id===x.id).length,visitas:(v.data||[]).filter(y=>y.vendedor_id===x.id).length,vendas:painelDados.vendas.filter(y=>y.vendedor_id===x.id).reduce((a,y)=>a+Number(y.valor||0),0),metas:painelDados.metas.filter(y=>y.vendedor_id===x.id).reduce((a,y)=>a+Number(y.valor||0),0)}));
   painelDados.erro='';
  }catch(e){painelDados.erro=e.message||String(e)}
  finally{painelDados.carregando=false;if(tab==='dashboard')render()}
 }
+let filtroPainelMes='',filtroPainelVendedor='';
+function alterarFiltroPainel(tipo,valor){if(tipo==='mes')filtroPainelMes=valor;else filtroPainelVendedor=valor;render()}
 function dashboard(){
  const soma=(arr,campo)=>arr.reduce((a,x)=>a+Number(x[campo]||0),0);
- const totalVendas=soma(painelDados.vendas,'valor'),totalMetas=soma(painelDados.metas,'valor');
- const abertas=painelDados.oportunidades.filter(x=>!['ganho','ganha','perdido','perdida','fechado','fechada'].includes(String(x.etapa||'').toLowerCase()));
+ const porVendedor=arr=>arr.filter(x=>!filtroPainelVendedor||x.vendedor_id===filtroPainelVendedor);
+ const noMes=(arr,campo)=>arr.filter(x=>!filtroPainelMes||String(x[campo]||'').slice(0,7)===filtroPainelMes);
+ const vendas=noMes(porVendedor(painelDados.vendas),'data_venda');
+ const metas=noMes(porVendedor(painelDados.metas),'competencia');
+ const oportunidades=porVendedor(painelDados.oportunidades);
+ const totalVendas=soma(vendas,'valor'),totalMetas=soma(metas,'valor');
+ const abertas=oportunidades.filter(x=>!['ganho','ganha','perdido','perdida','fechado','fechada'].includes(String(x.etapa||'').toLowerCase()));
  const pipeline=soma(abertas,'valor_estimado');
  const taxa=totalMetas>0?(100*totalVendas/totalMetas).toFixed(1)+'%':'—';
  const cards=[['Produtores',painelDados.clientes],['Fazendas',painelDados.fazendas],['Visitas registradas',painelDados.visitas],['Vendas registradas',money(totalVendas)],['Metas cadastradas',money(totalMetas)],['Atingimento das metas',taxa],['Pipeline aberto',money(pipeline)]];
- return '<h2>Painel gerencial — Supabase</h2><div class="notice">Indicadores consultados no Supabase. Vendas e metas somadas de todos os períodos cadastrados; pipeline considera oportunidades em aberto. Share de mercado ainda depende dos dados de potencial da carteira.</div>'+
+ const opts=painelDados.porVendedor.map(x=>'<option value="'+esc(x.id)+'" '+(filtroPainelVendedor===x.id?'selected':'')+'>'+esc(x.nome)+'</option>').join('');
+ const filtro='<div class="panel" style="padding:14px"><div class="fields"><div class="field"><label>Competência de vendas e metas</label><input type="month" value="'+esc(filtroPainelMes)+'" onchange="alterarFiltroPainel(\'mes\',this.value)"></div>'+(user==='gestor'?'<div class="field"><label>Vendedor</label><select onchange="alterarFiltroPainel(\'vendedor\',this.value)"><option value="">Toda a equipe</option>'+opts+'</select></div>':'')+'</div><p class="muted" style="margin:8px 0 0">O filtro mensal se aplica a vendas e metas. Pipeline mostra oportunidades abertas de todas as datas; cadastros e visitas mostram o total visível.</p></div>';
+ return '<h2>Painel gerencial — Supabase</h2><div class="notice">Indicadores reais do Supabase. Share de mercado depende do cadastro de potenciais da carteira.</div>'+
  (painelDados.carregando?'<p>Carregando dados do Supabase...</p>':painelDados.erro?'<p class="error">Erro ao consultar o Supabase: '+esc(painelDados.erro)+'</p>':
- '<div class="grid">'+cards.map(x=>'<div class="card"><div class="muted">'+x[0]+'</div><div class="metric">'+x[1]+'</div></div>').join('')+'</div>'+
- (user==='gestor'?'<div class="panel"><h3>Equipe comercial</h3><div style="overflow-x:auto"><table><tr><th>Vendedor</th><th>Produtores</th><th>Visitas</th><th>Vendas</th><th>Metas</th></tr>'+painelDados.porVendedor.map(x=>'<tr><td>'+esc(x.nome)+'</td><td>'+x.clientes+'</td><td>'+x.visitas+'</td><td>'+money(x.vendas)+'</td><td>'+money(x.metas)+'</td></tr>').join('')+'</table></div></div>':''));
+ filtro+'<div class="grid">'+cards.map(x=>'<div class="card"><div class="muted">'+x[0]+'</div><div class="metric">'+x[1]+'</div></div>').join('')+'</div>'+
+ (user==='gestor'?'<div class="panel"><h3>Equipe comercial</h3><div style="overflow-x:auto"><table><tr><th>Vendedor</th><th>Produtores</th><th>Visitas</th><th>Vendas</th><th>Metas</th></tr>'+painelDados.porVendedor.filter(x=>!filtroPainelVendedor||x.id===filtroPainelVendedor).map(x=>'<tr><td>'+esc(x.nome)+'</td><td>'+x.clientes+'</td><td>'+x.visitas+'</td><td>'+money(soma(vendas.filter(y=>y.vendedor_id===x.id),'valor'))+'</td><td>'+money(soma(metas.filter(y=>y.vendedor_id===x.id),'valor'))+'</td></tr>').join('')+'</table></div></div>':''));
 }
 function field(label,name,type='text',extra=''){return `<div class="field"><label>${label}</label><input name="${name}" type="${type}" ${extra} required></div>`}function formOpen(kind){return `<form onsubmit="add(event,'${kind}')"><div class="fields">`}function formClose(){return `</div><div class="actions"><button type="submit">Salvar registro</button></div></form>`}function clientes(){return `<h2>Produtores e propriedades</h2><div class="panel"><h3>Novo cadastro</h3>${formOpen('clients')}${field('Fazenda','nome')}${field('Produtor','produtor')}${field('Município','municipio')}${field('Cultura','cultura')}${field('Hectares','hectares','number','min="0" step="0.01"')}${field('Potencial anual (R$)','potencial','number','min="0" step="0.01"')}${ownerField()}${formClose()}</div><div class="panel"><h3>Carteira</h3><table><tr><th>Fazenda</th><th>Produtor</th><th>Município</th><th>Cultura</th><th>Área</th><th>Potencial</th><th>Responsável</th><th></th></tr>${clients().map(x=>`<tr><td>${esc(x.nome)}</td><td>${esc(x.produtor)}</td><td>${esc(x.municipio)}</td><td>${esc(x.cultura)}</td><td>${x.hectares} ha</td><td>${money(x.potencial)}</td><td>${names[x.vendedor]}</td><td><button class="danger" onclick="remove('clients',${x.id})">Excluir</button></td></tr>`).join('')}</table></div>`}
 let visitasReais=[],visitasFotos=[],visitasClientes=[],visitasFazendas=[],visitasErro='',visitasCarregando=false;
