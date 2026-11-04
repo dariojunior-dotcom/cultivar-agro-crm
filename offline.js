@@ -1,10 +1,12 @@
 /* Cultivar Agro offline queue. IndexedDB is device-local, not encrypted; only use on trusted devices. */
 (function(){
  const DB='cultivar-offline-v1', STORE='items';
- function database(){return new Promise((resolve,reject)=>{const q=indexedDB.open(DB,1);q.onupgradeneeded=()=>{const d=q.result;if(!d.objectStoreNames.contains(STORE))d.createObjectStore(STORE,{keyPath:'id'})};q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)})}
+ function database(){return new Promise((resolve,reject)=>{const q=indexedDB.open(DB,2);q.onupgradeneeded=()=>{const d=q.result;if(!d.objectStoreNames.contains(STORE))d.createObjectStore(STORE,{keyPath:'id'});if(!d.objectStoreNames.contains('snapshots'))d.createObjectStore('snapshots',{keyPath:'id'})};q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error)})}
  async function run(mode,fn){const db=await database();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,mode),store=tx.objectStore(STORE);let result;try{result=fn(store)}catch(e){db.close();reject(e);return}tx.oncomplete=()=>{db.close();resolve(result)};tx.onerror=()=>{db.close();reject(tx.error)};tx.onabort=()=>{db.close();reject(tx.error)}})}
  async function all(){const db=await database();return new Promise((resolve,reject)=>{const tx=db.transaction(STORE,'readonly');const q=tx.objectStore(STORE).getAll();q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);tx.oncomplete=()=>db.close()})}
  async function enqueue(type,owner,payload,files=[]){const item={id:crypto.randomUUID(),type,owner,payload,files:Array.from(files),created:new Date().toISOString()};await run('readwrite',store=>store.put(item));return item}
+ async function cache(owner,type,data){const db=await database();return new Promise((resolve,reject)=>{const tx=db.transaction('snapshots','readwrite');tx.objectStore('snapshots').put({id:owner+':'+type,data});tx.oncomplete=()=>{db.close();resolve()};tx.onerror=()=>{db.close();reject(tx.error)}})}
+ async function cached(owner,type){const db=await database();return new Promise((resolve,reject)=>{const tx=db.transaction('snapshots','readonly');const q=tx.objectStore('snapshots').get(owner+':'+type);q.onsuccess=()=>resolve(q.result?.data||null);q.onerror=()=>reject(q.error);tx.oncomplete=()=>db.close()})}
  async function remove(id){await run('readwrite',store=>store.delete(id))}
  async function pending(owner){return (await all()).filter(x=>x.owner===owner)}
  let busy=false;
@@ -43,5 +45,5 @@
    return {sent,failed};
   }finally{busy=false}
  }
- window.CultivarOffline={enqueue,pending,sync};
+ window.CultivarOffline={enqueue,pending,sync,cache,cached};
 })();
