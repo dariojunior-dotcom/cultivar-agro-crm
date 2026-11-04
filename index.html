@@ -157,24 +157,71 @@ function negocios(){
  formulario+'<div class="panel"><h3>Oportunidades encontradas: '+oportunidadesReais.length+'</h3>'+
  (oportunidadesReais.length?'<div style="overflow-x:auto"><table><tr><th>Produtor</th><th>Produto</th><th>Valor</th><th>Etapa</th><th>Probabilidade</th><th>Previsão</th><th>Responsável</th></tr>'+linhas+'</table></div>':'<p>Nenhuma oportunidade cadastrada ou visível para este usuário.</p>')+'</div>');
 }
-let comercialReal={vendas:[],metas:[],carregando:false,erro:''};
+
+let comercialReal={vendas:[],metas:[],clientes:[],equipe:[],carregando:false,erro:''};
 async function carregarComercialReal(){
  if(!sb||!perfilAtual)return;
  comercialReal.carregando=true;comercialReal.erro='';if(tab==='metas')render();
  try{
-  const [v,m]=await Promise.all([sb.from('vendas').select('*').limit(200),sb.from('metas').select('*').limit(200)]);
-  if(v.error)throw Error('Vendas: '+v.error.message);
-  if(m.error)throw Error('Metas: '+m.error.message);
-  comercialReal.vendas=v.data||[];comercialReal.metas=m.data||[];
- }catch(e){comercialReal.erro=e.message||String(e);comercialReal.vendas=[];comercialReal.metas=[]}
+  const requests=[sb.from('vendas').select('*').order('data_venda',{ascending:false}).limit(200),sb.from('metas').select('*').order('competencia',{ascending:false}).limit(200),sb.from('clientes').select('id,nome,vendedor_id').order('nome')];
+  if(user==='gestor')requests.push(sb.from('profiles').select('*'));
+  const results=await Promise.all(requests);
+  for(const r of results)if(r.error)throw r.error;
+  comercialReal.vendas=results[0].data||[];comercialReal.metas=results[1].data||[];
+  comercialReal.clientes=results[2].data||[];comercialReal.equipe=user==='gestor'?(results[3].data||[]).filter(x=>x.ativo!==false&&x.active!==false):[];
+ }catch(e){comercialReal.erro=e.message||String(e)}
  finally{comercialReal.carregando=false;if(tab==='metas')render()}
 }
+function numeroComercial(v){
+ const t=String(v||'').trim().replace(/\s/g,'');
+ const n=Number(t.includes(',')?t.replace(/\./g,'').replace(',','.'):t);
+ return n;
+}
+async function salvarVendaReal(event){
+ event.preventDefault();const form=event.target,button=form.querySelector('[type="submit"]');button.disabled=true;
+ try{
+  const f=new FormData(form),cliente=comercialReal.clientes.find(x=>x.id===f.get('cliente_id'));
+  if(!cliente)throw Error('Selecione um produtor válido.');
+  if(user!=='gestor'&&cliente.vendedor_id!==perfilAtual.id)throw Error('Produtor fora da sua carteira.');
+  if(!cliente.vendedor_id)throw Error('Produtor sem vendedor responsável.');
+  const produto=String(f.get('produto')||'').trim(),valor=numeroComercial(f.get('valor')),data_venda=String(f.get('data_venda')||'');
+  if(!produto||!data_venda||!Number.isFinite(valor)||valor<=0)throw Error('Informe produto, data e valor positivo.');
+  const {error}=await sb.from('vendas').insert({cliente_id:cliente.id,vendedor_id:cliente.vendedor_id,produto,valor,data_venda});
+  if(error)throw error;form.reset();await carregarComercialReal();alert('Venda registrada no Supabase.');
+ }catch(e){alert('Não foi possível salvar a venda: '+(e.message||e))}
+ finally{button.disabled=false}
+}
+async function salvarMetaReal(event){
+ event.preventDefault();const form=event.target,button=form.querySelector('[type="submit"]');button.disabled=true;
+ try{
+  const f=new FormData(form),vendedor_id=user==='gestor'?String(f.get('vendedor_id')||''):perfilAtual.id;
+  const competencia=String(f.get('competencia')||''),valor=numeroComercial(f.get('valor'));
+  if(!vendedor_id||!competencia||!Number.isFinite(valor)||valor<0)throw Error('Informe vendedor, competência e valor válido.');
+  if(user==='gestor'&&!comercialReal.equipe.some(x=>x.id===vendedor_id))throw Error('Selecione um usuário ativo.');
+  const {error}=await sb.from('metas').insert({vendedor_id,competencia:competencia+'-01',valor});
+  if(error)throw error;form.reset();await carregarComercialReal();alert('Meta registrada no Supabase.');
+ }catch(e){alert('Não foi possível salvar a meta: '+(e.message||e))}
+ finally{button.disabled=false}
+}
 function metas(){
+ const clientes=comercialReal.clientes.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.nome)+'</option>').join('');
+ const equipe=comercialReal.equipe.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.nome||p.name||p.email||p.id)+'</option>').join('');
  const linhas=(registros,titulo)=>'<div class="panel"><h3>'+titulo+' — '+registros.length+' registro(s)</h3>'+
  (registros.length?'<div style="overflow-x:auto"><table><tr>'+Object.keys(registros[0]).filter(k=>!['id','created_at','updated_at'].includes(k)).map(k=>'<th>'+esc(k.replaceAll('_',' '))+'</th>').join('')+'</tr>'+
  registros.map(x=>'<tr>'+Object.keys(registros[0]).filter(k=>!['id','created_at','updated_at'].includes(k)).map(k=>'<td>'+esc(x[k]===null?'—':String(x[k]??'—'))+'</td>').join('')+'</tr>').join('')+'</table></div>':'<p>Nenhum registro disponível para este usuário.</p>')+'</div>';
- return '<h2>Vendas e metas — Supabase</h2><div class="notice">Dados consultados diretamente no Supabase. Cadastro e edição serão liberados após validar os campos e as regras de acesso. Nenhum resultado demonstrativo é apresentado nesta aba.</div>'+
- (comercialReal.carregando?'<div class="panel">Consultando vendas e metas...</div>':comercialReal.erro?'<div class="panel">Erro na consulta: '+esc(comercialReal.erro)+'</div>':linhas(comercialReal.vendas,'Vendas')+linhas(comercialReal.metas,'Metas'));
+ const venda='<div class="panel"><h3>Registrar venda</h3><form onsubmit="salvarVendaReal(event)"><div class="fields">'+
+ '<div class="field"><label>Produtor</label><select name="cliente_id" required><option value="">Selecione</option>'+clientes+'</select></div>'+
+ '<div class="field"><label>Produto</label><input name="produto" required maxlength="160"></div>'+
+ '<div class="field"><label>Data da venda</label><input type="date" name="data_venda" required></div>'+
+ '<div class="field"><label>Valor (R$)</label><input name="valor" inputmode="decimal" placeholder="100,00" required></div>'+
+ '</div><button type="submit">Salvar venda</button></form></div>';
+ const meta='<div class="panel"><h3>Registrar meta mensal</h3><form onsubmit="salvarMetaReal(event)"><div class="fields">'+
+ (user==='gestor'?'<div class="field"><label>Vendedor</label><select name="vendedor_id" required><option value="">Selecione</option>'+equipe+'</select></div>':'')+
+ '<div class="field"><label>Competência (mês)</label><input type="month" name="competencia" required></div>'+
+ '<div class="field"><label>Valor da meta (R$)</label><input name="valor" inputmode="decimal" placeholder="1000,00" required></div>'+
+ '</div><button type="submit">Salvar meta</button></form></div>';
+ return '<h2>Vendas e metas — Supabase</h2><div class="notice">Registros reais. O responsável pela venda é o vendedor do produtor. As permissões são verificadas pelo Supabase.</div>'+
+ (comercialReal.carregando?'<div class="panel">Consultando vendas e metas...</div>':comercialReal.erro?'<div class="panel">Erro na consulta: '+esc(comercialReal.erro)+'</div>':venda+meta+linhas(comercialReal.vendas,'Vendas')+linhas(comercialReal.metas,'Metas'));
 }
 function dados(){return `<h2>Exportação e manutenção</h2><div class="panel"><p>Exporte registros para CSV ou um backup JSON. Tudo é armazenado neste dispositivo; não existe sincronização entre celulares.</p><div class="actions"><button onclick="csv('clients')">Exportar produtores CSV</button><button onclick="csv('visits')">Exportar visitas CSV</button><button onclick="csv('deals')">Exportar oportunidades CSV</button><button onclick="backup()">Backup JSON</button></div>${user==='gestor'?'<button class="danger" onclick="reset()">Restaurar dados demonstrativos</button>':''}</div>`}function add(e,k){e.preventDefault();const d=Object.fromEntries(new FormData(e.target));if(!d.vendedor||!names[d.vendedor]||d.vendedor==='gestor')return alert('Vendedor inválido');if(user!=='gestor')d.vendedor=user;if(k!=='clients'&&!clients().some(c=>c.id==d.cliente))return alert('Cliente inválido');for(let f of ['cliente','hectares','potencial','valor','lat','lng'])if(d[f]!==undefined)d[f]=Number(d[f]);d.id=Math.max(0,...db[k].map(x=>x.id))+1;db[k].push(d);save();render()}function remove(k,id){const item=db[k].find(x=>x.id===id);if(!item||!visible(item))return;if(k==='clients'&&(db.deals.some(x=>x.cliente===id)||db.visits.some(x=>x.cliente===id)))return alert('Exclua primeiro as visitas e oportunidades vinculadas.');if(confirm('Excluir este registro?')){db[k]=db[k].filter(x=>x.id!==id);save();render()}}function updateGoals(e){e.preventDefault();for(const [k,v] of new FormData(e.target))db.goals[k]=Math.max(0,Number(v));save();render()}
 function captureGPS(btn){const form=btn.closest('form'),status=form.querySelector('#gpsStatus');if(!navigator.geolocation){status.textContent='GPS indisponível neste navegador';return}status.textContent='Aguardando permissão...';navigator.geolocation.getCurrentPosition(pos=>{form.elements.lat.value=pos.coords.latitude.toFixed(6);form.elements.lng.value=pos.coords.longitude.toFixed(6);status.textContent='Localização registrada (precisão ~'+Math.round(pos.coords.accuracy)+' m)'},err=>{status.textContent='Não foi possível obter localização: '+err.message},{enableHighAccuracy:true,timeout:15000,maximumAge:0})}
