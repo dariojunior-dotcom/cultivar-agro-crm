@@ -395,4 +395,5 @@ async function showAuthenticated(account){
  document.getElementById('identity').textContent=account.email+' • '+(user==='gestor'?'Gestor':'Vendedor');
 }
 (async()=>{if(!sb){authMessage.textContent='Biblioteca Supabase indisponível';return}const {data}=await sb.auth.getUser();if(data?.user){try{await showAuthenticated(data.user)}catch(e){authMessage.textContent=e.message}}})();
+if('serviceWorker' in navigator && location.protocol==='https:'){navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('Cache offline indisponível',err))}
 </script></body></html>
