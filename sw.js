@@ -1,6 +1,6 @@
 /* Cultivar Agro: somente cache da interface, nunca de dados privados ou APIs. */
-const CACHE='cultivar-shell-v1';
-const SHELL=['./','./index.html'];
+const CACHE='cultivar-shell-v2';
+const SHELL=['./','./index.html','./offline.js'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',event=>{event.waitUntil(Promise.all([caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))),self.clients.claim()]))});
 self.addEventListener('fetch',event=>{
