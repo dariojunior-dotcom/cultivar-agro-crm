@@ -415,21 +415,30 @@ async function showAuthenticated(account){
  // Roles are read from Supabase profiles; RLS must also be verified on the database before production.
  user='v1';
  try{
-  const {data,error}=await sb.from('profiles').select('*').eq('id',account.id).maybeSingle();
-  if(error)throw error;
+  let data;
+  if(!navigator.onLine){
+   if(!window.CultivarOffline)throw Error('Modo offline indisponível neste aparelho.');
+   data=await CultivarOffline.cached(account.id,'perfil');
+   if(!data)throw Error('Abra o CRM com internet uma vez para preparar o acesso offline.');
+  }else{
+   const result=await sb.from('profiles').select('*').eq('id',account.id).maybeSingle();
+   if(result.error)throw result.error;
+   data=result.data;
+   if(data&&window.CultivarOffline)await CultivarOffline.cache(account.id,'perfil',data);
+  }
   perfilAtual=data;
   if(!data || data.active===false || data.ativo===false)throw new Error('Perfil de acesso não encontrado ou inativo.');
   const role=String(data.role||data.papel||data.tipo||'').toLowerCase();
   if(['gestor','admin','administrador'].includes(role))user='gestor';
   else if(['vendedor','seller'].includes(role))user='v1';
   else throw new Error('Perfil sem função autorizada.');
- }catch(e){await sb.auth.signOut();throw new Error('Acesso não liberado: '+(e.message||'verifique seu perfil no Supabase'))}
+ }catch(e){if(navigator.onLine)await sb.auth.signOut();throw new Error('Acesso não liberado: '+(e.message||'verifique seu perfil no Supabase'))}
  document.getElementById('login').classList.add('hidden');
  document.getElementById('app').classList.remove('hidden');
  document.getElementById('identity').textContent=account.email;
  tab='dashboard';render();carregarPainelReal();if(navigator.onLine)sincronizarPendencias(true);
  document.getElementById('identity').textContent=account.email+' • '+(user==='gestor'?'Gestor':'Vendedor');
 }
-(async()=>{if(!sb){authMessage.textContent='Biblioteca Supabase indisponível';return}const {data}=await sb.auth.getUser();if(data?.user){try{await showAuthenticated(data.user)}catch(e){authMessage.textContent=e.message}}})();
+(async()=>{if(!sb){authMessage.textContent='Biblioteca Supabase indisponível';return}const {data}=navigator.onLine?await sb.auth.getUser():await sb.auth.getSession();const account=data?.user||data?.session?.user;if(account){try{await showAuthenticated(account)}catch(e){authMessage.textContent=e.message}}})();
 if('serviceWorker' in navigator && location.protocol==='https:'){navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('Cache offline indisponível',err))}
 </script></body></html>
