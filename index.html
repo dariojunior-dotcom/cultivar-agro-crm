@@ -86,7 +86,7 @@ function visitasPage(){
  '</div><div class="actions"><button type="submit" '+(visitasCarregando||!visitasClientes.length?'disabled':'')+'>Salvar visita no Supabase</button></div></form></div>'+
  '<div class="panel"><h3>Histórico real</h3>'+(visitasCarregando?'<p>Carregando...</p>':visitasErro?'<p class="error">'+esc(visitasErro)+'</p>':
  '<p>'+visitasReais.length+' visita(s) encontrada(s).</p><table><tr><th>Data</th><th>Produtor</th><th>Fazenda</th><th>Assunto</th><th>Fotos</th></tr>'+
- visitasReais.map(v=>'<tr><td>'+esc(new Date(v.realizada_em).toLocaleString('pt-BR'))+'</td><td>'+esc(visitasClientes.find(c=>c.id===v.cliente_id)?.nome||'—')+'</td><td>'+esc(visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome||'—')+'</td><td>'+esc(v.assunto||'')+'</td><td><button type="button" onclick="abrirFotosVisita(\''+esc(v.id)+'\')">Ver fotos ('+visitasFotos.filter(p=>p.visita_id===v.id).length+')</button></td></tr>').join('')+'</table>')+'</div>';
+ visitasReais.map(v=>'<tr><td>'+esc(new Date(v.realizada_em).toLocaleString('pt-BR'))+'</td><td>'+esc(visitasClientes.find(c=>c.id===v.cliente_id)?.nome||'—')+'</td><td>'+esc(visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome||'—')+'</td><td>'+esc(v.assunto||'')+'</td><td><button type="button" onclick="abrirFotosVisita(\''+esc(v.id)+'\')">Ver fotos ('+visitasFotos.filter(p=>p.visita_id===v.id).length+')</button> <button type="button" class="alt" onclick="anexarFotoVisita(\''+esc(v.id)+'\')">Anexar foto</button></td></tr>').join('')+'</table>')+'</div>';
 }
 function filtrarFazendasVisita(form){const id=form.elements.cliente_id.value,sel=form.elements.fazenda_id;sel.value='';Array.from(sel.options).forEach(o=>{if(o.value)o.hidden=o.dataset.cliente!==id})}
 async function loadVisitasSupabase(){
@@ -146,6 +146,35 @@ async function salvarVisitaReal(event){
  else alert('Visita salva no Supabase'+(files.length?' com '+files.length+' foto(s).':'.'));
  }catch(e){alert('Não foi possível salvar: '+(e.message||e))}
  finally{button.disabled=false}
+}
+async function anexarFotoVisita(id){
+ if(!navigator.onLine){alert('Conecte-se à internet para anexar fotos a uma visita existente.');return;}
+ const visita=visitasReais.find(v=>v.id===id);
+ if(!visita||!perfilAtual){alert('Visita não encontrada.');return;}
+ if(user!=='gestor'&&visita.vendedor_id!==perfilAtual.id){alert('Acesso não autorizado à visita.');return;}
+ const input=document.createElement('input');input.type='file';input.accept='image/*';input.multiple=true;
+ input.onchange=async()=>{
+  const files=Array.from(input.files||[]);if(!files.length)return;
+  const existentes=visitasFotos.filter(f=>f.visita_id===id).length;
+  if(existentes+files.length>10){alert('Limite de 10 fotos por visita. Restam '+(10-existentes)+' vagas.');return;}
+  if(files.some(f=>!f.type.startsWith('image/')||f.size>10*1024*1024)){alert('Cada foto deve ser uma imagem de até 10 MB.');return;}
+  if(!confirm('Anexar '+files.length+' foto(s) à visita existente? Isso não cria outra visita.'))return;
+  let enviados=0,erros=[];
+  for(const file of files){
+   const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').toLowerCase().slice(0,8)||'jpg';
+   const path=perfilAtual.id+'/'+id+'/'+crypto.randomUUID()+'.'+ext;
+   try{
+    const {error:up}=await sb.storage.from('fotos-visitas').upload(path,file,{contentType:file.type,upsert:false});
+    if(up)throw up;
+    const {error:meta}=await sb.from('visitas_fotos').insert({visita_id:id,vendedor_id:visita.vendedor_id,caminho_arquivo:path});
+    if(meta){await sb.storage.from('fotos-visitas').remove([path]);throw meta;}
+    enviados++;
+   }catch(e){erros.push(file.name+': '+(e.message||e));}
+  }
+  await loadVisitasSupabase();
+  alert(enviados+' foto(s) anexada(s).'+(erros.length?' Falhas: '+erros.join('; '):''));
+ };
+ input.click();
 }
 async function abrirFotosVisita(id){
  const fotos=visitasFotos.filter(p=>p.visita_id===id);if(!fotos.length){alert('Nenhuma foto cadastrada nesta visita.');return;}
