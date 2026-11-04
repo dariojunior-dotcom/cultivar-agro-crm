@@ -8,11 +8,11 @@ window.addEventListener('online',()=>sincronizarPendencias(true));
 async function verPendenciasOffline(){
  if(!window.CultivarOffline||!perfilAtual){alert('Fila offline indisponível.');return;}
  const pendentes=await CultivarOffline.pending(perfilAtual.id);
- if(!pendentes.length){alert('Nenhum registro pendente neste aparelho.');return;}
+ if(!pendentes.length){alert('Nenhum registro pendente neste aparelho. Confira se a foto foi selecionada antes de salvar a visita.');return;}
  if(!navigator.onLine){alert(pendentes.length+' registro(s) aguardando internet. Não apague os dados do navegador.');return;}
  await sincronizarPendencias(false);
  const restantes=await CultivarOffline.pending(perfilAtual.id);
- alert(restantes.length?restantes.length+' registro(s) ainda pendente(s). Verifique a conexão e as permissões.':'Todos os registros pendentes foram sincronizados.');
+ alert(restantes.length?restantes.map(x=>x.type+' ('+x.files?.length+' foto(s)): '+x.id).join('; ')+' ainda pendente(s). Verifique a conexão e as permissões.':'Todos os registros pendentes foram sincronizados.');
 }
 function go(t){tab=t;render();if(t==='clientes')loadClientesSupabase();if(t==='fazendas')loadFazendasSupabase();if(t==='visitas')loadVisitasSupabase();if(t==='dashboard')carregarPainelReal();if(t==='negocios')carregarOportunidadesReais();if(t==='metas')carregarComercialReal();if(t==='mapa')carregarMapaReal()}function render(){document.getElementById('identity').textContent=names[user];document.getElementById('nav').innerHTML=[['dashboard','Painel'],['clientes','Produtores'],['fazendas','Fazendas'],['visitas','Visitas'],['negocios','Oportunidades'],['metas','Metas e share'],['mapa','Mapa e GPS'],['dados','Dados']].map(([k,v])=>`<button class="${tab===k?'active':''}" onclick="go('${k}')">${v}</button>`).join('')+'<button type="button" onclick="verPendenciasOffline()">Sincronizar pendências</button>';try{const page=({dashboard:dashboard,clientes:clientesSupabase,fazendas:fazendasSupabase,visitas:visitasPage,negocios:negocios,metas:metas,dados:dados,mapa:mapa})[tab];document.getElementById('content').innerHTML=page()}catch(e){console.error('Erro ao abrir aba',tab,e);document.getElementById('content').innerHTML='<div class="panel"><h2>Não foi possível abrir esta aba</h2><p>'+esc(e.message||String(e))+'</p><button onclick="go(\'dashboard\')">Voltar ao painel</button></div>'}if(tab==='mapa')setTimeout(drawMap,30)}let painelDados={clientes:0,fazendas:0,visitas:0,vendas:[],metas:[],oportunidades:[],carregando:false,erro:'',porVendedor:[]};
 async function carregarPainelReal(){
