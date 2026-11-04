@@ -135,7 +135,7 @@ async function salvarVisitaReal(event){
  let erros=[];
  for(const file of files){
   const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-zA-Z0-9]/g,'').toLowerCase().slice(0,8)||'jpg';
-  const path=perfilAtual.id+'/'+visita.id+'/'+crypto.randomUUID()+'.'+ext;
+  const path=cliente.vendedor_id+'/'+visita.id+'/'+crypto.randomUUID()+'.'+ext;
   const up=await sb.storage.from('fotos-visitas').upload(path,file,{contentType:file.type,upsert:false});
   if(up.error){erros.push(file.name+': '+up.error.message);continue;}
   const meta=await sb.from('visitas_fotos').insert({visita_id:visita.id,vendedor_id:cliente.vendedor_id,caminho_arquivo:path});
@@ -162,7 +162,7 @@ async function anexarFotoVisita(id){
   let enviados=0,erros=[];
   for(const file of files){
    const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').toLowerCase().slice(0,8)||'jpg';
-   const path=perfilAtual.id+'/'+id+'/'+crypto.randomUUID()+'.'+ext;
+   const path=visita.vendedor_id+'/'+id+'/'+crypto.randomUUID()+'.'+ext;
    try{
     const {error:up}=await sb.storage.from('fotos-visitas').upload(path,file,{contentType:file.type,upsert:false});
     if(up)throw up;
