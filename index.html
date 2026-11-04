@@ -270,10 +270,10 @@ const sb=window.supabase?.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
 
 /* HOMOLOGAÇÃO: somente a aba Produtores usa dados reais do Supabase. */
 let clientesReais=[], clientesErro='', clientesCarregando=false, perfilAtual=null;
-const FELLIPE_ID='c2efcc3a-5808-49b8-bbff-d0921d7bcccc';
+let clientesEquipe=[];
 function clientesSupabase(){
  const gestor=user==='gestor';
- const responsavel=gestor?`<div class="field"><label>Responsável</label><select name="vendedor_id" required><option value="${esc(perfilAtual?.id||'')}">Gestor</option><option value="${FELLIPE_ID}">Fellipe</option></select></div>`:'';
+ const responsavel=gestor?`<div class="field"><label>Responsável</label><select name="vendedor_id" required>${clientesEquipe.map(p=>`<option value="${esc(p.id)}">${esc(p.nome||p.name||p.email||p.id)}</option>`).join('')}</select></div>`:'';
  return `<h2>Produtores — Supabase</h2>
  <div class="notice"><b>Homologação:</b> os registros desta aba são consultados e salvos no Supabase. Não insira dados confidenciais antes de validar as permissões.</div>
  <div class="panel"><h3>Novo produtor</h3>
@@ -289,12 +289,13 @@ function clientesSupabase(){
  ${clientesCarregando?'<p>Carregando...</p>':clientesErro?'<p class="error">'+esc(clientesErro)+'</p>':
  `<p class="muted">${clientesReais.length} produtor(es) encontrado(s).</p>
  <table><tr><th>Produtor</th><th>Município</th><th>UF</th><th>Telefone</th><th>Responsável</th></tr>
- ${clientesReais.map(c=>`<tr><td>${esc(c.nome)}</td><td>${esc(c.municipio)}</td><td>${esc(c.uf)}</td><td>${esc(c.telefone)}</td><td>${c.vendedor_id===FELLIPE_ID?'Fellipe':c.vendedor_id===perfilAtual?.id?'Você':'Outro vendedor'}</td></tr>`).join('')}</table>`}</div>`;
+ ${clientesReais.map(c=>`<tr><td>${esc(c.nome)}</td><td>${esc(c.municipio)}</td><td>${esc(c.uf)}</td><td>${esc(c.telefone)}</td><td>${clientesEquipe.find(p=>p.id===c.vendedor_id)?.nome|| (c.vendedor_id===perfilAtual?.id?'Você':'Outro vendedor')}</td></tr>`).join('')}</table>`}</div>`;
 }
 async function loadClientesSupabase(){
  if(!sb||!perfilAtual)return;
  clientesCarregando=true;clientesErro='';if(tab==='clientes')render();
- const {data,error}=await sb.from('clientes').select('id,vendedor_id,nome,cpf_cnpj,telefone,municipio,uf,observacoes,criado_em').order('criado_em',{ascending:false});
+ const [{data,error},equipe]=await Promise.all([sb.from('clientes').select('id,vendedor_id,nome,cpf_cnpj,telefone,municipio,uf,observacoes,criado_em').order('criado_em',{ascending:false}),user==='gestor'?sb.from('profiles').select('*'):Promise.resolve({data:[]})]);
+ if(user==='gestor'&&!equipe.error)clientesEquipe=(equipe.data||[]).filter(p=>p.ativo!==false&&p.active!==false);
  clientesCarregando=false;
  if(error){clientesErro='Erro ao carregar: '+error.message;clientesReais=[]}else clientesReais=data||[];
  if(tab==='clientes')render();
@@ -306,7 +307,7 @@ async function salvarClienteSupabase(event){
  try{
   const f=new FormData(form),gestor=user==='gestor';
   const vendedor_id=gestor?String(f.get('vendedor_id')||''):perfilAtual?.id;
-  if(!vendedor_id||(gestor&&![perfilAtual.id,FELLIPE_ID].includes(vendedor_id)))throw Error('Responsável inválido.');
+  if(!vendedor_id||(gestor&&!clientesEquipe.some(p=>p.id===vendedor_id)))throw Error('Responsável inválido.');
   const nome=String(f.get('nome')||'').trim();
   if(!nome)throw Error('Informe o nome do produtor.');
   const payload={vendedor_id,nome};
