@@ -209,7 +209,7 @@ function metas(){
  const nomeVendedor=id=>{const p=comercialReal.equipe.find(x=>x.id===id);return p?(p.nome||p.name||p.email||'Vendedor'):id===perfilAtual?.id?(perfilAtual.nome||perfilAtual.name||perfilAtual.email||'Meu usuário'):'Vendedor não identificado';};
  const nomeProdutor=id=>comercialReal.clientes.find(x=>x.id===id)?.nome||'Produtor não identificado';
  const formatarCampo=(k,v)=>k==='cliente_id'?nomeProdutor(v):k==='vendedor_id'?nomeVendedor(v):k==='valor'?money(Number(v||0)):k==='competencia'?String(v||'').slice(0,7):v===null?'—':String(v??'—');
- const linhas=(registros,titulo)=>'<div class="panel"><h3>'+titulo+' — '+registros.length+' registro(s)</h3>'
+ const linhas=(registros,titulo)=>'<div class="panel"><h3>'+titulo+' — '+registros.length+' registro(s)</h3>'+ 
  (registros.length?'<div style="overflow-x:auto"><table><tr>'+Object.keys(registros[0]).filter(k=>!['id','created_at','updated_at'].includes(k)).map(k=>'<th>'+esc(k.replaceAll('_',' '))+'</th>').join('')+'</tr>'+
  registros.map(x=>'<tr>'+Object.keys(registros[0]).filter(k=>!['id','created_at','updated_at'].includes(k)).map(k=>'<td>'+esc(formatarCampo(k,x[k]))+'</td>').join('')+'</tr>').join('')+'</table></div>':'<p>Nenhum registro disponível para este usuário.</p>')+'</div>';
  const venda='<div class="panel"><h3>Registrar venda</h3><form onsubmit="salvarVendaReal(event)"><div class="fields">'+
