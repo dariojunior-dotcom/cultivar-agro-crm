@@ -152,9 +152,21 @@ async function anexarFotoVisita(id){
  const visita=visitasReais.find(v=>v.id===id);
  if(!visita||!perfilAtual){alert('Visita não encontrada.');return;}
  if(user!=='gestor'&&visita.vendedor_id!==perfilAtual.id){alert('Acesso não autorizado à visita.');return;}
- const input=document.createElement('input');input.type='file';input.accept='image/*';input.multiple=true;
+ const input=document.createElement('input');input.type='file';input.accept='image/*';input.multiple=true;input.style.position='fixed';input.style.left='-9999px';input.setAttribute('aria-label','Selecionar fotos da visita');document.body.appendChild(input);
+ const limpar=()=>{if(input.isConnected)input.remove()};
+ input.addEventListener('cancel',limpar,{once:true});
  input.onchange=async()=>{
-  const files=Array.from(input.files||[]);if(!files.length)return;
+  const selecionados=Array.from(input.files||[]);
+  if(!selecionados.length){limpar();return;}
+  limpar();
+  try{await processarFotosSelecionadas(id,selecionados)}catch(e){alert('Erro ao anexar foto: '+(e.message||e))}
+ };
+ input.click();
+}
+async function processarFotosSelecionadas(id,files){
+ const visita=visitasReais.find(v=>v.id===id);
+ if(!visita)throw Error('Visita não encontrada.');
+  if(!files.length)return;
   const existentes=visitasFotos.filter(f=>f.visita_id===id).length;
   if(existentes+files.length>10){alert('Limite de 10 fotos por visita. Restam '+(10-existentes)+' vagas.');return;}
   if(files.some(f=>!f.type.startsWith('image/')||f.size>10*1024*1024)){alert('Cada foto deve ser uma imagem de até 10 MB.');return;}
@@ -173,8 +185,6 @@ async function anexarFotoVisita(id){
   }
   await loadVisitasSupabase();
   alert(enviados+' foto(s) anexada(s).'+(erros.length?' Falhas: '+erros.join('; '):''));
- };
- input.click();
 }
 async function abrirFotosVisita(id){
  const fotos=visitasFotos.filter(p=>p.visita_id===id);if(!fotos.length){alert('Nenhuma foto cadastrada nesta visita.');return;}
