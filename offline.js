@@ -27,14 +27,26 @@
       if(lookupError)throw lookupError;
       if(!existing){const {error}=await sb.from('visitas').insert({...item.payload,id:item.id});if(error)throw Error('Gravação da visita: '+(error.message||String(error)))}
       for(let n=0;n<item.files.length;n++){
-       const file=item.files[n],ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').slice(0,8)||'jpg';
+       const file=item.files[n];
+       const filename=typeof file?.name==='string'?file.name:'foto.jpg';
+       const ext=(filename.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').slice(0,8)||'jpg';
+       // Safari may restore a File from IndexedDB as a Blob without its File metadata.
+       // Supabase Storage needs actual binary content, not a metadata-only object.
+       let bytes;
+       if(file instanceof Blob)bytes=new Uint8Array(await file.arrayBuffer());
+       else if(file?.bytes instanceof ArrayBuffer)bytes=new Uint8Array(file.bytes);
+       else if(file?.bytes instanceof Uint8Array)bytes=file.bytes;
+       else if(file instanceof ArrayBuffer)bytes=new Uint8Array(file);
+       else if(file instanceof Uint8Array)bytes=file;
+       else throw Error('Foto '+(n+1)+' sem conteúdo binário recuperável no navegador. Registro preservado; não apague os dados do Safari.');
+       if(!bytes.byteLength)throw Error('Foto '+(n+1)+' está vazia no armazenamento local. Registro preservado; não apague os dados do Safari.');
        const responsavel=item.payload.vendedor_id;
        if(!responsavel)throw Error('Visita sem vendedor responsável.');
        const path=responsavel+'/'+item.id+'/'+item.id+'-'+n+'.'+ext;
        const {data:meta,error:metaErr}=await sb.from('visitas_fotos').select('id').eq('caminho_arquivo',path).maybeSingle();
        if(metaErr)throw Error('Consulta do registro da foto '+(n+1)+': '+(metaErr.message||String(metaErr)));
        if(!meta){
-        const {error:uploadErr}=await sb.storage.from('fotos-visitas').upload(path,file,{contentType:file.type,upsert:false});
+        const {error:uploadErr}=await sb.storage.from('fotos-visitas').upload(path,bytes,{contentType:file?.type||'image/jpeg',upsert:false});
         if(uploadErr&&!/already exists|duplicate/i.test(uploadErr.message||''))throw Error('Envio da foto '+(n+1)+' ao Storage: '+(uploadErr.message||String(uploadErr)));
         const {error:insertErr}=await sb.from('visitas_fotos').insert({visita_id:item.id,vendedor_id:item.payload.vendedor_id,caminho_arquivo:path});
         if(insertErr)throw Error('Cadastro da foto '+(n+1)+' no Supabase: '+(insertErr.message||String(insertErr)));
