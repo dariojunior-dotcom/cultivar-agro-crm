@@ -20,24 +20,24 @@
      if(item.type==='oportunidade'){
       // Stable client-generated UUID ensures safe retries after an uncertain network response.
       const {data:existing,error:lookupError}=await sb.from('oportunidades').select('id').eq('id',item.id).maybeSingle();
-      if(lookupError)throw lookupError;
-      if(!existing){const {error}=await sb.from('oportunidades').insert({...item.payload,id:item.id});if(error)throw error}
+      if(lookupError)throw Error('Consulta do registro no Supabase: '+(lookupError.message||String(lookupError)));
+      if(!existing){const {error}=await sb.from('oportunidades').insert({...item.payload,id:item.id});if(error)throw Error('Gravação da oportunidade: '+(error.message||String(error)))}
      }else if(item.type==='visita'){
       const {data:existing,error:lookupError}=await sb.from('visitas').select('id').eq('id',item.id).maybeSingle();
       if(lookupError)throw lookupError;
-      if(!existing){const {error}=await sb.from('visitas').insert({...item.payload,id:item.id});if(error)throw error}
+      if(!existing){const {error}=await sb.from('visitas').insert({...item.payload,id:item.id});if(error)throw Error('Gravação da visita: '+(error.message||String(error)))}
       for(let n=0;n<item.files.length;n++){
        const file=item.files[n],ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').slice(0,8)||'jpg';
        const responsavel=item.payload.vendedor_id;
        if(!responsavel)throw Error('Visita sem vendedor responsável.');
        const path=responsavel+'/'+item.id+'/'+item.id+'-'+n+'.'+ext;
        const {data:meta,error:metaErr}=await sb.from('visitas_fotos').select('id').eq('caminho_arquivo',path).maybeSingle();
-       if(metaErr)throw metaErr;
+       if(metaErr)throw Error('Consulta do registro da foto '+(n+1)+': '+(metaErr.message||String(metaErr)));
        if(!meta){
         const {error:uploadErr}=await sb.storage.from('fotos-visitas').upload(path,file,{contentType:file.type,upsert:false});
-        if(uploadErr&&!/already exists|duplicate/i.test(uploadErr.message||''))throw uploadErr;
+        if(uploadErr&&!/already exists|duplicate/i.test(uploadErr.message||''))throw Error('Envio da foto '+(n+1)+' ao Storage: '+(uploadErr.message||String(uploadErr)));
         const {error:insertErr}=await sb.from('visitas_fotos').insert({visita_id:item.id,vendedor_id:item.payload.vendedor_id,caminho_arquivo:path});
-        if(insertErr)throw insertErr;
+        if(insertErr)throw Error('Cadastro da foto '+(n+1)+' no Supabase: '+(insertErr.message||String(insertErr)));
        }
       }
      }else throw Error('Tipo de registro desconhecido.');
