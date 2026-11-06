@@ -187,12 +187,32 @@ async function processarFotosSelecionadas(id,files){
   alert(enviados+' foto(s) anexada(s).'+(erros.length?' Falhas: '+erros.join('; '):''));
 }
 async function abrirFotosVisita(id){
- const fotos=visitasFotos.filter(p=>p.visita_id===id);if(!fotos.length){alert('Nenhuma foto cadastrada nesta visita.');return;}
+ const fotos=visitasFotos.filter(p=>p.visita_id===id);
+ if(!fotos.length){alert('Nenhuma foto cadastrada nesta visita.');return;}
+ const {data:auth,error:authError}=await sb.auth.getUser();
+ if(authError||!auth?.user){alert('Sua sessão expirou. Entre novamente para abrir as fotos.');return;}
+ const falhas=[];
  for(const foto of fotos){
- const {data,error}=await sb.storage.from('fotos-visitas').createSignedUrl(foto.caminho_arquivo,60);
- if(error){alert('Acesso à foto negado: '+error.message);continue;}
- window.open(data.signedUrl,'_blank','noopener');
+  const caminho=String(foto.caminho_arquivo||'');
+  if(!caminho){falhas.push('Registro sem caminho do arquivo');continue;}
+  try{
+   const {data:arquivo,error:downloadError}=await sb.storage.from('fotos-visitas').download(caminho);
+   if(!downloadError&&arquivo){
+    const url=URL.createObjectURL(arquivo);
+    const novaAba=window.open(url,'_blank','noopener');
+    if(!novaAba){
+     const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener';link.textContent='Abrir foto';
+     link.click();
+    }
+    setTimeout(()=>URL.revokeObjectURL(url),120000);
+    continue;
+   }
+   const {data:assinada,error:assinaturaError}=await sb.storage.from('fotos-visitas').createSignedUrl(caminho,120);
+   if(!assinaturaError&&assinada?.signedUrl){window.open(assinada.signedUrl,'_blank','noopener');continue;}
+   falhas.push((assinaturaError?.message||downloadError?.message||'Erro desconhecido')+' — pasta '+caminho.split('/')[0]);
+  }catch(e){falhas.push((e.message||String(e))+' — pasta '+caminho.split('/')[0]);}
  }
+ if(falhas.length)alert('Não foi possível abrir '+falhas.length+' foto(s). '+falhas.join('; ')+'. Verifique as permissões de leitura do Storage para o usuário conectado.');
 }
 let oportunidadesReais=[],oportunidadesClientes=[],oportunidadesEquipe=[],oportunidadesCarregando=false,oportunidadesErro='';
 async function carregarOportunidadesReais(){
