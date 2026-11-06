@@ -40,6 +40,7 @@ async function carregarPainelReal(){
   const error=[c,f,v,p,vd,m,o].find(x=>x.error)?.error;
   if(error)throw error;
   painelDados.clientes=(c.data||[]).length;painelDados.fazendas=(f.data||[]).length;painelDados.visitas=(v.data||[]).length;
+  painelDados.clientesRegistros=c.data||[];painelDados.fazendasRegistros=f.data||[];painelDados.visitasRegistros=v.data||[];
   painelDados.vendas=vd.data||[];painelDados.metas=m.data||[];painelDados.oportunidades=o.data||[];
   const equipe=(p.data||[]).filter(x=>['vendedor','seller'].includes(String(x.papel||x.role||x.tipo||'').toLowerCase())&&x.ativo!==false&&x.active!==false);
   painelDados.porVendedor=equipe.map(x=>({id:x.id,nome:x.nome||x.name||'Vendedor',clientes:(c.data||[]).filter(y=>y.vendedor_id===x.id).length,visitas:(v.data||[]).filter(y=>y.vendedor_id===x.id).length,vendas:painelDados.vendas.filter(y=>y.vendedor_id===x.id).reduce((a,y)=>a+Number(y.valor||0),0),metas:painelDados.metas.filter(y=>y.vendedor_id===x.id).reduce((a,y)=>a+Number(y.valor||0),0)}));
@@ -60,7 +61,7 @@ function dashboard(){
  const abertas=oportunidades.filter(x=>!['ganho','ganha','perdido','perdida','fechado','fechada'].includes(String(x.etapa||'').toLowerCase()));
  const pipeline=soma(abertas,'valor_estimado');
  const taxa=totalMetas>0?(100*totalVendas/totalMetas).toFixed(1)+'%':'—';
- const cards=[['Produtores',painelDados.clientes],['Fazendas',painelDados.fazendas],['Visitas registradas',painelDados.visitas],['Vendas registradas',money(totalVendas)],['Metas cadastradas',money(totalMetas)],['Atingimento das metas',taxa],['Pipeline aberto',money(pipeline)]];
+ const cards=[['Produtores',porVendedor(painelDados.clientesRegistros||[]).length],['Fazendas',porVendedor(painelDados.fazendasRegistros||[]).length],['Visitas registradas',porVendedor(painelDados.visitasRegistros||[]).length],['Vendas registradas',money(totalVendas)],['Metas cadastradas',money(totalMetas)],['Atingimento das metas',taxa],['Pipeline aberto',money(pipeline)]];
  const opts=painelDados.porVendedor.map(x=>'<option value="'+esc(x.id)+'" '+(filtroPainelVendedor===x.id?'selected':'')+'>'+esc(x.nome)+'</option>').join('');
  const filtro='<div class="panel" style="padding:14px"><div class="fields"><div class="field"><label>Competência de vendas e metas</label><input type="month" value="'+esc(filtroPainelMes)+'" onchange="alterarFiltroPainel(\'mes\',this.value)"></div>'+(user==='gestor'?'<div class="field"><label>Vendedor</label><select onchange="alterarFiltroPainel(\'vendedor\',this.value)"><option value="">Toda a equipe</option>'+opts+'</select></div>':'')+'</div><p class="muted" style="margin:8px 0 0">O filtro mensal se aplica a vendas e metas. Pipeline mostra oportunidades abertas de todas as datas; cadastros e visitas mostram o total visível.</p></div>';
  return '<h2>Painel gerencial — Supabase</h2><div class="notice">Indicadores reais do Supabase. Share de mercado depende do cadastro de potenciais da carteira.</div>'+
