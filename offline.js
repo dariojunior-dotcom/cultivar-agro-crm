@@ -28,7 +28,9 @@
       if(!existing){const {error}=await sb.from('visitas').insert({...item.payload,id:item.id});if(error)throw error}
       for(let n=0;n<item.files.length;n++){
        const file=item.files[n],ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').slice(0,8)||'jpg';
-       const path=owner+'/'+item.id+'/'+item.id+'-'+n+'.'+ext;
+       const responsavel=item.payload.vendedor_id;
+       if(!responsavel)throw Error('Visita sem vendedor responsável.');
+       const path=responsavel+'/'+item.id+'/'+item.id+'-'+n+'.'+ext;
        const {data:meta,error:metaErr}=await sb.from('visitas_fotos').select('id').eq('caminho_arquivo',path).maybeSingle();
        if(metaErr)throw metaErr;
        if(!meta){
