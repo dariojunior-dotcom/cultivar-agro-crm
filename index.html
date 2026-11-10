@@ -200,29 +200,54 @@ async function abrirFotosVisita(id){
  if(!fotos.length){alert('Nenhuma foto cadastrada nesta visita.');return;}
  const {data:auth,error:authError}=await sb.auth.getUser();
  if(authError||!auth?.user){alert('Sua sessão expirou. Entre novamente para abrir as fotos.');return;}
- const falhas=[];
- for(const foto of fotos){
-  const caminho=String(foto.caminho_arquivo||'');
-  if(!caminho){falhas.push('Registro sem caminho do arquivo');continue;}
+ document.getElementById('galeriaVisitas')?.remove();
+ const overlay=document.createElement('div');
+ overlay.id='galeriaVisitas';
+ overlay.setAttribute('role','dialog');
+ overlay.setAttribute('aria-modal','true');
+ overlay.setAttribute('aria-label','Fotos da visita');
+ overlay.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;padding:12px;';
+ const painel=document.createElement('div');
+ painel.style.cssText='background:#fff;color:#172b23;border-radius:12px;width:min(96vw,900px);max-height:96vh;display:flex;flex-direction:column;gap:12px;padding:14px;box-sizing:border-box;';
+ const topo=document.createElement('div');topo.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:12px;';
+ const titulo=document.createElement('strong');
+ const fechar=document.createElement('button');fechar.type='button';fechar.textContent='Fechar';fechar.setAttribute('aria-label','Fechar galeria');
+ topo.append(titulo,fechar);
+ const imagem=document.createElement('img');imagem.alt='Foto da visita';imagem.style.cssText='display:none;max-width:100%;max-height:65vh;object-fit:contain;margin:auto;';
+ const mensagem=document.createElement('p');mensagem.style.cssText='text-align:center;overflow-wrap:anywhere;';
+ const navegacao=document.createElement('div');navegacao.style.cssText='display:flex;justify-content:space-between;gap:12px;';
+ const anterior=document.createElement('button');anterior.type='button';anterior.textContent='← Anterior';
+ const proxima=document.createElement('button');proxima.type='button';proxima.textContent='Próxima →';
+ navegacao.append(anterior,proxima);painel.append(topo,imagem,mensagem,navegacao);overlay.append(painel);document.body.append(overlay);
+ let indice=0,urlAtual=null,sequencia=0,fechada=false;
+ const limparUrl=()=>{if(urlAtual){URL.revokeObjectURL(urlAtual);urlAtual=null;}};
+ const encerrar=()=>{fechada=true;sequencia++;limparUrl();document.removeEventListener('keydown',teclado);overlay.remove();};
+ const teclado=e=>{if(e.key==='Escape')encerrar();else if(e.key==='ArrowLeft'&&indice>0)mostrar(indice-1);else if(e.key==='ArrowRight'&&indice<fotos.length-1)mostrar(indice+1);};
+ async function mostrar(n){
+  indice=n;const chamada=++sequencia;limparUrl();imagem.removeAttribute('src');imagem.style.display='none';
+  titulo.textContent='Foto '+(indice+1)+' de '+fotos.length;
+  anterior.disabled=indice===0;proxima.disabled=indice===fotos.length-1;
+  mensagem.textContent='Carregando foto...';mensagem.style.display='block';
+  const caminho=String(fotos[indice].caminho_arquivo||'');
+  if(!caminho){mensagem.textContent='Este registro não possui caminho de arquivo no Supabase.';return;}
   try{
-   const {data:arquivo,error:downloadError}=await sb.storage.from('fotos-visitas').download(caminho);
-   if(!downloadError&&arquivo){
-    const url=URL.createObjectURL(arquivo);
-    const novaAba=window.open(url,'_blank','noopener');
-    if(!novaAba){
-     const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener';link.textContent='Abrir foto';
-     link.click();
-    }
-    setTimeout(()=>URL.revokeObjectURL(url),120000);
-    continue;
-   }
-   const {data:assinada,error:assinaturaError}=await sb.storage.from('fotos-visitas').createSignedUrl(caminho,120);
-   if(!assinaturaError&&assinada?.signedUrl){window.open(assinada.signedUrl,'_blank','noopener');continue;}
-   falhas.push((assinaturaError?.message||downloadError?.message||'Erro desconhecido')+' — pasta '+caminho.split('/')[0]);
-  }catch(e){falhas.push((e.message||String(e))+' — pasta '+caminho.split('/')[0]);}
+   const {data:arquivo,error}=await sb.storage.from('fotos-visitas').download(caminho);
+   if(fechada||chamada!==sequencia)return;
+   if(error||!arquivo)throw Error(error?.message||'Arquivo não encontrado no Storage.');
+   const url=URL.createObjectURL(arquivo);urlAtual=url;
+   imagem.onload=()=>{if(!fechada&&chamada===sequencia){imagem.style.display='block';mensagem.style.display='none';}};
+   imagem.onerror=()=>{if(!fechada&&chamada===sequencia){imagem.style.display='none';mensagem.textContent='O arquivo foi baixado, mas não pôde ser exibido como imagem.';}};
+   imagem.src=url;
+  }catch(e){if(!fechada&&chamada===sequencia)mensagem.textContent='Não foi possível carregar esta foto: '+(e.message||String(e));}
  }
- if(falhas.length)alert('Não foi possível abrir '+falhas.length+' foto(s). '+falhas.join('; ')+'. Verifique as permissões de leitura do Storage para o usuário conectado.');
+ fechar.onclick=encerrar;
+ overlay.addEventListener('click',e=>{if(e.target===overlay)encerrar();});
+ anterior.onclick=()=>{if(indice>0)mostrar(indice-1);};
+ proxima.onclick=()=>{if(indice<fotos.length-1)mostrar(indice+1);};
+ document.addEventListener('keydown',teclado);
+ await mostrar(0);
 }
+
 let oportunidadesReais=[],oportunidadesClientes=[],oportunidadesEquipe=[],oportunidadesCarregando=false,oportunidadesErro='';
 async function carregarOportunidadesReais(){
  if(!sb||!perfilAtual)return;
