@@ -71,6 +71,28 @@ function dashboard(){
 }
 function field(label,name,type='text',extra=''){return `<div class="field"><label>${label}</label><input name="${name}" type="${type}" ${extra} required></div>`}function formOpen(kind){return `<form onsubmit="add(event,'${kind}')"><div class="fields">`}function formClose(){return `</div><div class="actions"><button type="submit">Salvar registro</button></div></form>`}function clientes(){return `<h2>Produtores e propriedades</h2><div class="panel"><h3>Novo cadastro</h3>${formOpen('clients')}${field('Fazenda','nome')}${field('Produtor','produtor')}${field('Município','municipio')}${field('Cultura','cultura')}${field('Hectares','hectares','number','min="0" step="0.01"')}${field('Potencial anual (R$)','potencial','number','min="0" step="0.01"')}${ownerField()}${formClose()}</div><div class="panel"><h3>Carteira</h3><table><tr><th>Fazenda</th><th>Produtor</th><th>Município</th><th>Cultura</th><th>Área</th><th>Potencial</th><th>Responsável</th><th></th></tr>${clients().map(x=>`<tr><td>${esc(x.nome)}</td><td>${esc(x.produtor)}</td><td>${esc(x.municipio)}</td><td>${esc(x.cultura)}</td><td>${x.hectares} ha</td><td>${money(x.potencial)}</td><td>${names[x.vendedor]}</td><td><button class="danger" onclick="remove('clients',${x.id})">Excluir</button></td></tr>`).join('')}</table></div>`}
 let visitasReais=[],visitasFotos=[],visitasClientes=[],visitasFazendas=[],visitasErro='',visitasCarregando=false;
+const fotosRascunhoVisita=new WeakMap();
+function adicionarFotosRascunho(input){
+ const form=input.form;if(!form)return;
+ const anteriores=fotosRascunhoVisita.get(form)||[];
+ const novas=Array.from(input.files||[]);
+ input.value='';
+ if(!novas.length)return;
+ if(anteriores.length+novas.length>10){alert('Limite de 10 fotos por visita. Você já selecionou '+anteriores.length+'.');return;}
+ if(novas.some(f=>!f.type.startsWith('image/')||f.size>10*1024*1024)){alert('Cada foto deve ser uma imagem de até 10 MB.');return;}
+ fotosRascunhoVisita.set(form,anteriores.concat(novas));
+ atualizarFotosRascunho(form);
+}
+function atualizarFotosRascunho(form){
+ const lista=form.querySelector('[data-fotos-rascunho]');
+ if(!lista)return;
+ const fotos=fotosRascunhoVisita.get(form)||[];
+ lista.textContent=fotos.length+' foto(s) selecionada(s) para esta visita.';
+ const remover=form.querySelector('[data-remover-fotos]');
+ if(remover)remover.hidden=!fotos.length;
+}
+function limparFotosRascunho(form){fotosRascunhoVisita.delete(form);atualizarFotosRascunho(form);}
+
 function visitasPage(){
  const co=visitasClientes.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.nome)+'</option>').join('');
  const fo=visitasFazendas.map(f=>'<option value="'+esc(f.id)+'" data-cliente="'+esc(f.cliente_id)+'">'+esc(f.nome)+'</option>').join('');
@@ -82,7 +104,7 @@ function visitasPage(){
  '<div class="field"><label>Assunto</label><input name="assunto"></div>'+
  '<div class="field wide"><label>Observações e resultado</label><textarea name="observacoes"></textarea></div>'+
  '<div class="field"><label>Próximo contato (opcional)</label><input type="date" name="proxima_visita_em"></div>'+
- '<div class="field wide"><label>Fotos (até 10, máximo de 10 MB cada)</label><input type="file" name="fotos" accept="image/*" multiple></div>'+
+ '<div class="field wide"><label>Fotos (até 10, máximo de 10 MB cada)</label><input type="file" name="fotos" accept="image/*" multiple onchange="adicionarFotosRascunho(this)"><p data-fotos-rascunho>0 foto(s) selecionada(s) para esta visita.</p><button type="button" class="alt" data-remover-fotos hidden onclick="limparFotosRascunho(this.form)">Limpar fotos</button></div>'+
  '<div class="field wide"><label>GPS (somente com permissão)</label><div class="geo"><button type="button" onclick="captureGPS(this)">📍 Capturar localização</button><span id="gpsStatus" class="muted">Nenhuma localização registrada</span></div><input type="hidden" name="lat"><input type="hidden" name="lng"></div>'+
  '</div><div class="actions"><button type="submit" '+(visitasCarregando||!visitasClientes.length?'disabled':'')+'>Salvar visita no Supabase</button></div></form></div>'+
  '<div class="panel"><h3>Histórico real</h3>'+(visitasCarregando?'<p>Carregando...</p>':visitasErro?'<p class="error">'+esc(visitasErro)+'</p>':
@@ -121,7 +143,7 @@ async function salvarVisitaReal(event){
  if(user!=='gestor'&&cliente.vendedor_id!==perfilAtual.id)throw Error('Produtor fora da sua carteira.');
  const fazenda=visitasFazendas.find(f=>f.id===d.get('fazenda_id'));
  if(d.get('fazenda_id')&&(!fazenda||fazenda.cliente_id!==cliente.id))throw Error('Fazenda não pertence ao produtor.');
- const files=Array.from(form.elements.fotos.files||[]);
+ const files=Array.from(fotosRascunhoVisita.get(form)||[]);
  if(files.length>10)throw Error('Selecione no máximo 10 fotos.');
  for(const file of files)if(!file.type.startsWith('image/')||file.size>10*1024*1024)throw Error('Cada arquivo deve ser uma imagem de até 10 MB.');
  const data=String(d.get('realizada_em')||'');if(!data||!Number.isFinite(Date.parse(data)))throw Error('Informe a data da visita.');
@@ -130,7 +152,7 @@ async function salvarVisitaReal(event){
  if(!navigator.onLine){
   if(!window.CultivarOffline)throw Error('Armazenamento offline não está disponível neste aparelho.');
   await CultivarOffline.enqueue('visita',perfilAtual.id,payload,files);
-  form.reset();alert('Visita e fotos guardadas neste aparelho. Serão sincronizadas quando houver internet. Não limpe os dados do navegador.');return;
+  form.reset();limparFotosRascunho(form);alert('Visita e fotos guardadas neste aparelho. Serão sincronizadas quando houver internet. Não limpe os dados do navegador.');return;
  }
  const {data:visita,error}=await sb.from('visitas').insert(payload).select('id').single();if(error)throw error;
  let erros=[];
@@ -150,6 +172,7 @@ async function salvarVisitaReal(event){
    catch(e){erros.push(file.name+': '+meta.error.message+'; falha ao guardar offline: '+(e.message||e));}
   }
  }
+ limparFotosRascunho(form);form.reset();
  await loadVisitasSupabase();
  if(erros.length)alert('Visita salva, mas algumas fotos falharam: '+erros.join('; '));
  else alert('Visita salva no Supabase'+(files.length?' com '+files.length+' foto(s).':'.'));
