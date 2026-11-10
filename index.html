@@ -23,7 +23,7 @@ async function verPendenciasOffline(){
  }else alert('Todos os registros pendentes foram sincronizados.');
  if(resultado.sent){if(tab==='visitas')loadVisitasSupabase();if(tab==='negocios')carregarOportunidadesReais();}
 }
-function go(t){tab=t;render();if(t==='clientes')loadClientesSupabase();if(t==='fazendas')loadFazendasSupabase();if(t==='visitas')loadVisitasSupabase();if(t==='dashboard')carregarPainelReal();if(t==='negocios')carregarOportunidadesReais();if(t==='metas')carregarComercialReal();if(t==='mapa')carregarMapaReal()}function render(){document.getElementById('identity').textContent=names[user];document.getElementById('nav').innerHTML=[['dashboard','Painel'],['clientes','Produtores'],['fazendas','Fazendas'],['visitas','Visitas'],['negocios','Oportunidades'],['metas','Metas e share'],['mapa','Mapa e GPS'],['dados','Dados']].map(([k,v])=>`<button class="${tab===k?'active':''}" onclick="go('${k}')">${v}</button>`).join('')+'<button type="button" onclick="verPendenciasOffline()">Sincronizar pendências</button>';try{const page=({dashboard:dashboard,clientes:clientesSupabase,fazendas:fazendasSupabase,visitas:visitasPage,negocios:negocios,metas:metas,dados:dados,mapa:mapa})[tab];document.getElementById('content').innerHTML=page()}catch(e){console.error('Erro ao abrir aba',tab,e);document.getElementById('content').innerHTML='<div class="panel"><h2>Não foi possível abrir esta aba</h2><p>'+esc(e.message||String(e))+'</p><button onclick="go(\'dashboard\')">Voltar ao painel</button></div>'}if(tab==='mapa')setTimeout(drawMap,30)}let painelDados={clientes:0,fazendas:0,visitas:0,vendas:[],metas:[],oportunidades:[],carregando:false,erro:'',porVendedor:[]};
+function go(t){tab=t;render();if(t==='clientes')loadClientesSupabase();if(t==='fazendas')loadFazendasSupabase();if(t==='visitas')loadVisitasSupabase();if(t==='dashboard')carregarPainelReal();if(t==='negocios')carregarOportunidadesReais();if(t==='metas')carregarComercialReal();if(t==='mapa')carregarMapaReal();if(t==='equipe')carregarEquipeGestor()}function render(){document.getElementById('identity').textContent=names[user];document.getElementById('nav').innerHTML=[['dashboard','Painel'],['clientes','Produtores'],['fazendas','Fazendas'],['visitas','Visitas'],['negocios','Oportunidades'],['metas','Metas e share'],['mapa','Mapa e GPS'],...(user==='gestor'?[['equipe','Vendedores']]:[]),['dados','Dados']].map(([k,v])=>`<button class="${tab===k?'active':''}" onclick="go('${k}')">${v}</button>`).join('')+'<button type="button" onclick="verPendenciasOffline()">Sincronizar pendências</button>';try{const page=({dashboard:dashboard,clientes:clientesSupabase,fazendas:fazendasSupabase,visitas:visitasPage,negocios:negocios,metas:metas,dados:dados,mapa:mapa,equipe:paginaEquipeGestor})[tab];document.getElementById('content').innerHTML=page()}catch(e){console.error('Erro ao abrir aba',tab,e);document.getElementById('content').innerHTML='<div class="panel"><h2>Não foi possível abrir esta aba</h2><p>'+esc(e.message||String(e))+'</p><button onclick="go(\'dashboard\')">Voltar ao painel</button></div>'}if(tab==='mapa')setTimeout(drawMap,30)}let painelDados={clientes:0,fazendas:0,visitas:0,vendas:[],metas:[],oportunidades:[],carregando:false,erro:'',porVendedor:[]};
 async function carregarPainelReal(){
  if(!sb||!perfilAtual)return;
  painelDados.carregando=true;painelDados.erro='';if(tab==='dashboard')render();
@@ -71,6 +71,28 @@ function dashboard(){
 }
 function field(label,name,type='text',extra=''){return `<div class="field"><label>${label}</label><input name="${name}" type="${type}" ${extra} required></div>`}function formOpen(kind){return `<form onsubmit="add(event,'${kind}')"><div class="fields">`}function formClose(){return `</div><div class="actions"><button type="submit">Salvar registro</button></div></form>`}function clientes(){return `<h2>Produtores e propriedades</h2><div class="panel"><h3>Novo cadastro</h3>${formOpen('clients')}${field('Fazenda','nome')}${field('Produtor','produtor')}${field('Município','municipio')}${field('Cultura','cultura')}${field('Hectares','hectares','number','min="0" step="0.01"')}${field('Potencial anual (R$)','potencial','number','min="0" step="0.01"')}${ownerField()}${formClose()}</div><div class="panel"><h3>Carteira</h3><table><tr><th>Fazenda</th><th>Produtor</th><th>Município</th><th>Cultura</th><th>Área</th><th>Potencial</th><th>Responsável</th><th></th></tr>${clients().map(x=>`<tr><td>${esc(x.nome)}</td><td>${esc(x.produtor)}</td><td>${esc(x.municipio)}</td><td>${esc(x.cultura)}</td><td>${x.hectares} ha</td><td>${money(x.potencial)}</td><td>${names[x.vendedor]}</td><td><button class="danger" onclick="remove('clients',${x.id})">Excluir</button></td></tr>`).join('')}</table></div>`}
 let visitasReais=[],visitasFotos=[],visitasClientes=[],visitasFazendas=[],visitasErro='',visitasCarregando=false;
+const fotosRascunhoVisita=new WeakMap();
+function adicionarFotosRascunho(input){
+ const form=input.form;if(!form)return;
+ const anteriores=fotosRascunhoVisita.get(form)||[];
+ const novas=Array.from(input.files||[]);
+ input.value='';
+ if(!novas.length)return;
+ if(anteriores.length+novas.length>10){alert('Limite de 10 fotos por visita. Você já selecionou '+anteriores.length+'.');return;}
+ if(novas.some(f=>!f.type.startsWith('image/')||f.size>10*1024*1024)){alert('Cada foto deve ser uma imagem de até 10 MB.');return;}
+ fotosRascunhoVisita.set(form,anteriores.concat(novas));
+ atualizarFotosRascunho(form);
+}
+function atualizarFotosRascunho(form){
+ const lista=form.querySelector('[data-fotos-rascunho]');
+ if(!lista)return;
+ const fotos=fotosRascunhoVisita.get(form)||[];
+ lista.textContent=fotos.length+' foto(s) selecionada(s) para esta visita.';
+ const remover=form.querySelector('[data-remover-fotos]');
+ if(remover)remover.hidden=!fotos.length;
+}
+function limparFotosRascunho(form){fotosRascunhoVisita.delete(form);atualizarFotosRascunho(form);}
+
 function visitasPage(){
  const co=visitasClientes.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.nome)+'</option>').join('');
  const fo=visitasFazendas.map(f=>'<option value="'+esc(f.id)+'" data-cliente="'+esc(f.cliente_id)+'">'+esc(f.nome)+'</option>').join('');
@@ -82,12 +104,12 @@ function visitasPage(){
  '<div class="field"><label>Assunto</label><input name="assunto"></div>'+
  '<div class="field wide"><label>Observações e resultado</label><textarea name="observacoes"></textarea></div>'+
  '<div class="field"><label>Próximo contato (opcional)</label><input type="date" name="proxima_visita_em"></div>'+
- '<div class="field wide"><label>Fotos (até 10, máximo de 10 MB cada)</label><input type="file" name="fotos" accept="image/*" multiple></div>'+
+ '<div class="field wide"><label>Fotos (até 10, máximo de 10 MB cada)</label><input type="file" name="fotos" accept="image/*" multiple onchange="adicionarFotosRascunho(this)"><p data-fotos-rascunho>0 foto(s) selecionada(s) para esta visita.</p><button type="button" class="alt" data-remover-fotos hidden onclick="limparFotosRascunho(this.form)">Limpar fotos</button></div>'+
  '<div class="field wide"><label>GPS (somente com permissão)</label><div class="geo"><button type="button" onclick="captureGPS(this)">📍 Capturar localização</button><span id="gpsStatus" class="muted">Nenhuma localização registrada</span></div><input type="hidden" name="lat"><input type="hidden" name="lng"></div>'+
  '</div><div class="actions"><button type="submit" '+(visitasCarregando||!visitasClientes.length?'disabled':'')+'>Salvar visita no Supabase</button></div></form></div>'+
  '<div class="panel"><h3>Histórico real</h3>'+(visitasCarregando?'<p>Carregando...</p>':visitasErro?'<p class="error">'+esc(visitasErro)+'</p>':
  '<p>'+visitasReais.length+' visita(s) encontrada(s).</p><table><tr><th>Data</th><th>Produtor</th><th>Fazenda</th><th>Assunto</th><th>Fotos</th></tr>'+
- visitasReais.map(v=>'<tr><td>'+esc(new Date(v.realizada_em).toLocaleString('pt-BR'))+'</td><td>'+esc(visitasClientes.find(c=>c.id===v.cliente_id)?.nome||'—')+'</td><td>'+esc(visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome||'—')+'</td><td>'+esc(v.assunto||'')+'</td><td><button type="button" onclick="abrirFotosVisita(\''+esc(v.id)+'\')">Ver fotos ('+visitasFotos.filter(p=>p.visita_id===v.id).length+')</button> <button type="button" class="alt" onclick="anexarFotoVisita(\''+esc(v.id)+'\')">Anexar foto</button></td></tr>').join('')+'</table>')+'</div>';
+ visitasReais.map(v=>'<tr><td>'+esc(new Date(v.realizada_em).toLocaleString('pt-BR'))+'</td><td>'+esc(visitasClientes.find(c=>c.id===v.cliente_id)?.nome||'—')+'</td><td>'+esc(visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome||'—')+'</td><td>'+esc(v.assunto||'')+'</td><td><button type="button" onclick="abrirRelatorioVisita(\''+esc(v.id)+'\')">Ver relatório</button> <button type="button" onclick="abrirFotosVisita(\''+esc(v.id)+'\')">Ver fotos ('+visitasFotos.filter(p=>p.visita_id===v.id).length+')</button> <button type="button" class="alt" onclick="anexarFotoVisita(\''+esc(v.id)+'\')">Anexar foto</button></td></tr>').join('')+'</table>')+'</div>';
 }
 function filtrarFazendasVisita(form){const id=form.elements.cliente_id.value,sel=form.elements.fazenda_id;sel.value='';Array.from(sel.options).forEach(o=>{if(o.value)o.hidden=o.dataset.cliente!==id})}
 async function loadVisitasSupabase(){
@@ -121,7 +143,7 @@ async function salvarVisitaReal(event){
  if(user!=='gestor'&&cliente.vendedor_id!==perfilAtual.id)throw Error('Produtor fora da sua carteira.');
  const fazenda=visitasFazendas.find(f=>f.id===d.get('fazenda_id'));
  if(d.get('fazenda_id')&&(!fazenda||fazenda.cliente_id!==cliente.id))throw Error('Fazenda não pertence ao produtor.');
- const files=Array.from(form.elements.fotos.files||[]);
+ const files=Array.from(fotosRascunhoVisita.get(form)||[]);
  if(files.length>10)throw Error('Selecione no máximo 10 fotos.');
  for(const file of files)if(!file.type.startsWith('image/')||file.size>10*1024*1024)throw Error('Cada arquivo deve ser uma imagem de até 10 MB.');
  const data=String(d.get('realizada_em')||'');if(!data||!Number.isFinite(Date.parse(data)))throw Error('Informe a data da visita.');
@@ -130,7 +152,7 @@ async function salvarVisitaReal(event){
  if(!navigator.onLine){
   if(!window.CultivarOffline)throw Error('Armazenamento offline não está disponível neste aparelho.');
   await CultivarOffline.enqueue('visita',perfilAtual.id,payload,files);
-  form.reset();alert('Visita e fotos guardadas neste aparelho. Serão sincronizadas quando houver internet. Não limpe os dados do navegador.');return;
+  form.reset();limparFotosRascunho(form);alert('Visita e fotos guardadas neste aparelho. Serão sincronizadas quando houver internet. Não limpe os dados do navegador.');return;
  }
  const {data:visita,error}=await sb.from('visitas').insert(payload).select('id').single();if(error)throw error;
  let erros=[];
@@ -138,10 +160,19 @@ async function salvarVisitaReal(event){
   const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-zA-Z0-9]/g,'').toLowerCase().slice(0,8)||'jpg';
   const path=cliente.vendedor_id+'/'+visita.id+'/'+crypto.randomUUID()+'.'+ext;
   const up=await sb.storage.from('fotos-visitas').upload(path,file,{contentType:file.type,upsert:false});
-  if(up.error){erros.push(file.name+': '+up.error.message);continue;}
+  if(up.error){
+   try{await CultivarOffline.enqueue('foto_pendente',perfilAtual.id,{visita_id:visita.id,vendedor_id:cliente.vendedor_id},[file]);erros.push(file.name+': envio pendente, foto preservada neste aparelho');}
+   catch(e){erros.push(file.name+': '+up.error.message+'; falha ao guardar offline: '+(e.message||e));}
+   continue;
+  }
   const meta=await sb.from('visitas_fotos').insert({visita_id:visita.id,vendedor_id:cliente.vendedor_id,caminho_arquivo:path});
-  if(meta.error){await sb.storage.from('fotos-visitas').remove([path]);erros.push(file.name+': '+meta.error.message);}
+  if(meta.error){
+   await sb.storage.from('fotos-visitas').remove([path]);
+   try{await CultivarOffline.enqueue('foto_pendente',perfilAtual.id,{visita_id:visita.id,vendedor_id:cliente.vendedor_id},[file]);erros.push(file.name+': cadastro pendente, foto preservada neste aparelho');}
+   catch(e){erros.push(file.name+': '+meta.error.message+'; falha ao guardar offline: '+(e.message||e));}
+  }
  }
+ limparFotosRascunho(form);form.reset();
  await loadVisitasSupabase();
  if(erros.length)alert('Visita salva, mas algumas fotos falharam: '+erros.join('; '));
  else alert('Visita salva no Supabase'+(files.length?' com '+files.length+' foto(s).':'.'));
@@ -149,7 +180,6 @@ async function salvarVisitaReal(event){
  finally{button.disabled=false}
 }
 async function anexarFotoVisita(id){
- if(!navigator.onLine){alert('Conecte-se à internet para anexar fotos a uma visita existente.');return;}
  const visita=visitasReais.find(v=>v.id===id);
  if(!visita||!perfilAtual){alert('Visita não encontrada.');return;}
  if(user!=='gestor'&&visita.vendedor_id!==perfilAtual.id){alert('Acesso não autorizado à visita.');return;}
@@ -172,6 +202,15 @@ async function processarFotosSelecionadas(id,files){
   if(existentes+files.length>10){alert('Limite de 10 fotos por visita. Restam '+(10-existentes)+' vagas.');return;}
   if(files.some(f=>!f.type.startsWith('image/')||f.size>10*1024*1024)){alert('Cada foto deve ser uma imagem de até 10 MB.');return;}
   if(!confirm('Anexar '+files.length+' foto(s) à visita existente? Isso não cria outra visita.'))return;
+  if(!navigator.onLine){
+   if(!window.CultivarOffline||!perfilAtual)throw Error('Armazenamento offline indisponível.');
+   const pendentes=await CultivarOffline.pending(perfilAtual.id);
+   const jaGuardadas=pendentes.filter(p=>p.type==='foto_pendente'&&p.payload?.visita_id===id).reduce((total,p)=>total+p.files.length,0);
+   if(existentes+jaGuardadas+files.length>10)throw Error('Limite de 10 fotos por visita, incluindo fotos pendentes.');
+   for(const file of files)await CultivarOffline.enqueue('foto_pendente',perfilAtual.id,{visita_id:id,vendedor_id:visita.vendedor_id},[file]);
+   alert(files.length+' foto(s) guardada(s) neste aparelho para esta visita. Sincronize ao voltar a internet. Não limpe os dados do navegador.');
+   return;
+  }
   let enviados=0,erros=[];
   for(const file of files){
    const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').toLowerCase().slice(0,8)||'jpg';
@@ -182,39 +221,83 @@ async function processarFotosSelecionadas(id,files){
     const {error:meta}=await sb.from('visitas_fotos').insert({visita_id:id,vendedor_id:visita.vendedor_id,caminho_arquivo:path});
     if(meta){await sb.storage.from('fotos-visitas').remove([path]);throw meta;}
     enviados++;
-   }catch(e){erros.push(file.name+': '+(e.message||e));}
+   }catch(e){
+    if(window.CultivarOffline&&perfilAtual){
+     try{await CultivarOffline.enqueue('foto_pendente',perfilAtual.id,{visita_id:id,vendedor_id:visita.vendedor_id},[file]);erros.push(file.name+': envio pendente, foto preservada no aparelho');}
+     catch(saveError){erros.push(file.name+': '+(e.message||e)+'; não foi possível guardar offline: '+(saveError.message||saveError));}
+    }else erros.push(file.name+': '+(e.message||e));
+   }
   }
   await loadVisitasSupabase();
   alert(enviados+' foto(s) anexada(s).'+(erros.length?' Falhas: '+erros.join('; '):''));
+}
+function abrirRelatorioVisita(id){
+ const v=visitasReais.find(x=>x.id===id);
+ if(!v){alert('Visita não encontrada.');return;}
+ document.getElementById('relatorioVisita')?.remove();
+ const overlay=document.createElement('div');overlay.id='relatorioVisita';
+ overlay.style.cssText='position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;padding:12px';
+ const painel=document.createElement('div');painel.style.cssText='background:#fff;color:#20352b;padding:20px;border-radius:12px;max-height:90vh;overflow:auto;width:min(95vw,720px)';
+ const titulo=document.createElement('h2');titulo.textContent='Relatório da visita';painel.append(titulo);
+ const dados=[['Data',new Date(v.realizada_em).toLocaleString('pt-BR')],['Produtor',visitasClientes.find(c=>c.id===v.cliente_id)?.nome||'—'],['Fazenda',visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome||'—'],['Assunto',v.assunto||'—'],['Observações e resultado',v.observacoes||'Não informado'],['Próxima visita',v.proxima_visita_em?new Date(v.proxima_visita_em).toLocaleDateString('pt-BR'):'Não agendada'],['Quantidade de fotos',String(visitasFotos.filter(f=>f.visita_id===id).length)]];
+ for(const [nome,valor] of dados){const p=document.createElement('p');p.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere';const strong=document.createElement('strong');strong.textContent=nome+': ';p.append(strong,document.createTextNode(String(valor)));painel.append(p);}
+ const fechar=document.createElement('button');fechar.type='button';fechar.textContent='Fechar';fechar.onclick=()=>overlay.remove();
+ const fotos=document.createElement('button');fotos.type='button';fotos.textContent='Ver fotos';fotos.onclick=()=>{overlay.remove();abrirFotosVisita(id);};
+ painel.append(fechar,document.createTextNode(' '),fotos);overlay.append(painel);overlay.onclick=e=>{if(e.target===overlay)overlay.remove();};document.body.append(overlay);
 }
 async function abrirFotosVisita(id){
  const fotos=visitasFotos.filter(p=>p.visita_id===id);
  if(!fotos.length){alert('Nenhuma foto cadastrada nesta visita.');return;}
  const {data:auth,error:authError}=await sb.auth.getUser();
  if(authError||!auth?.user){alert('Sua sessão expirou. Entre novamente para abrir as fotos.');return;}
- const falhas=[];
- for(const foto of fotos){
-  const caminho=String(foto.caminho_arquivo||'');
-  if(!caminho){falhas.push('Registro sem caminho do arquivo');continue;}
+ document.getElementById('galeriaVisitas')?.remove();
+ const overlay=document.createElement('div');
+ overlay.id='galeriaVisitas';
+ overlay.setAttribute('role','dialog');
+ overlay.setAttribute('aria-modal','true');
+ overlay.setAttribute('aria-label','Fotos da visita');
+ overlay.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;padding:12px;';
+ const painel=document.createElement('div');
+ painel.style.cssText='background:#fff;color:#172b23;border-radius:12px;width:min(96vw,900px);max-height:96vh;display:flex;flex-direction:column;gap:12px;padding:14px;box-sizing:border-box;';
+ const topo=document.createElement('div');topo.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:12px;';
+ const titulo=document.createElement('strong');
+ const fechar=document.createElement('button');fechar.type='button';fechar.textContent='Fechar';fechar.setAttribute('aria-label','Fechar galeria');
+ topo.append(titulo,fechar);
+ const imagem=document.createElement('img');imagem.alt='Foto da visita';imagem.style.cssText='display:none;max-width:100%;max-height:65vh;object-fit:contain;margin:auto;';
+ const mensagem=document.createElement('p');mensagem.style.cssText='text-align:center;overflow-wrap:anywhere;';
+ const navegacao=document.createElement('div');navegacao.style.cssText='display:flex;justify-content:space-between;gap:12px;';
+ const anterior=document.createElement('button');anterior.type='button';anterior.textContent='← Anterior';
+ const proxima=document.createElement('button');proxima.type='button';proxima.textContent='Próxima →';
+ navegacao.append(anterior,proxima);painel.append(topo,imagem,mensagem,navegacao);overlay.append(painel);document.body.append(overlay);
+ let indice=0,urlAtual=null,sequencia=0,fechada=false;
+ const limparUrl=()=>{if(urlAtual){URL.revokeObjectURL(urlAtual);urlAtual=null;}};
+ const encerrar=()=>{fechada=true;sequencia++;limparUrl();document.removeEventListener('keydown',teclado);overlay.remove();};
+ const teclado=e=>{if(e.key==='Escape')encerrar();else if(e.key==='ArrowLeft'&&indice>0)mostrar(indice-1);else if(e.key==='ArrowRight'&&indice<fotos.length-1)mostrar(indice+1);};
+ async function mostrar(n){
+  indice=n;const chamada=++sequencia;limparUrl();imagem.removeAttribute('src');imagem.style.display='none';
+  titulo.textContent='Foto '+(indice+1)+' de '+fotos.length;
+  anterior.disabled=indice===0;proxima.disabled=indice===fotos.length-1;
+  mensagem.textContent='Carregando foto...';mensagem.style.display='block';
+  const caminho=String(fotos[indice].caminho_arquivo||'');
+  if(!caminho){mensagem.textContent='Este registro não possui caminho de arquivo no Supabase.';return;}
   try{
-   const {data:arquivo,error:downloadError}=await sb.storage.from('fotos-visitas').download(caminho);
-   if(!downloadError&&arquivo){
-    const url=URL.createObjectURL(arquivo);
-    const novaAba=window.open(url,'_blank','noopener');
-    if(!novaAba){
-     const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener';link.textContent='Abrir foto';
-     link.click();
-    }
-    setTimeout(()=>URL.revokeObjectURL(url),120000);
-    continue;
-   }
-   const {data:assinada,error:assinaturaError}=await sb.storage.from('fotos-visitas').createSignedUrl(caminho,120);
-   if(!assinaturaError&&assinada?.signedUrl){window.open(assinada.signedUrl,'_blank','noopener');continue;}
-   falhas.push((assinaturaError?.message||downloadError?.message||'Erro desconhecido')+' — pasta '+caminho.split('/')[0]);
-  }catch(e){falhas.push((e.message||String(e))+' — pasta '+caminho.split('/')[0]);}
+   const {data:arquivo,error}=await sb.storage.from('fotos-visitas').download(caminho);
+   if(fechada||chamada!==sequencia)return;
+   if(error||!arquivo)throw Error(error?.message||'Arquivo não encontrado no Storage.');
+   const url=URL.createObjectURL(arquivo);urlAtual=url;
+   imagem.onload=()=>{if(!fechada&&chamada===sequencia){imagem.style.display='block';mensagem.style.display='none';}};
+   imagem.onerror=()=>{if(!fechada&&chamada===sequencia){imagem.style.display='none';mensagem.textContent='O arquivo foi baixado, mas não pôde ser exibido como imagem.';}};
+   imagem.src=url;
+  }catch(e){if(!fechada&&chamada===sequencia)mensagem.textContent='Não foi possível carregar esta foto: '+(e.message||String(e));}
  }
- if(falhas.length)alert('Não foi possível abrir '+falhas.length+' foto(s). '+falhas.join('; ')+'. Verifique as permissões de leitura do Storage para o usuário conectado.');
+ fechar.onclick=encerrar;
+ overlay.addEventListener('click',e=>{if(e.target===overlay)encerrar();});
+ anterior.onclick=()=>{if(indice>0)mostrar(indice-1);};
+ proxima.onclick=()=>{if(indice<fotos.length-1)mostrar(indice+1);};
+ document.addEventListener('keydown',teclado);
+ await mostrar(0);
 }
+
 let oportunidadesReais=[],oportunidadesClientes=[],oportunidadesEquipe=[],oportunidadesCarregando=false,oportunidadesErro='';
 async function carregarOportunidadesReais(){
  if(!sb||!perfilAtual)return;
@@ -349,6 +432,41 @@ function metas(){
  '</div><button type="submit">Salvar meta</button></form></div>';
  return '<h2>Vendas e metas — Supabase</h2><div class="notice">Registros reais. O responsável pela venda é o vendedor do produtor. As permissões são verificadas pelo Supabase.</div>'+
  (comercialReal.carregando?'<div class="panel">Consultando vendas e metas...</div>':comercialReal.erro?'<div class="panel">Erro na consulta: '+esc(comercialReal.erro)+'</div>':venda+meta+linhas(comercialReal.vendas,'Vendas')+linhas(comercialReal.metas,'Metas'));
+}
+let equipeGestor=[],equipeErro='',equipeCarregando=false;
+function paginaEquipeGestor(){
+ if(user!=='gestor')return '<h2>Acesso restrito ao gestor</h2>';
+ return '<h2>Gestão de vendedores</h2><div class="panel"><h3>Equipe cadastrada</h3>'+
+ '<p class="muted">Ações administrativas exigem conexão e a função segura de gestão publicada no Supabase. Desativar bloqueia o acesso sem apagar histórico.</p>'+'<form onsubmit="criarVendedorGestor(event)"><div class="fields"><div class="field"><label>Nome do novo vendedor</label><input name="nome" required></div><div class="field"><label>E-mail do novo vendedor</label><input name="email" type="email" required></div></div><button type="submit">Convidar vendedor</button></form>'+
+ (equipeCarregando?'<p>Carregando equipe...</p>':equipeErro?'<p class="error">'+esc(equipeErro)+'</p>':
+ '<table><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Ações</th></tr>'+equipeGestor.map(p=>'<tr><td>'+esc(p.nome||p.name||'—')+'</td><td>'+esc(p.email||'—')+'</td><td>'+esc(p.role||p.papel||'—')+'</td><td>'+(p.id===perfilAtual.id?'Seu perfil':('<button type="button" onclick="alternarVendedorGestor(\''+esc(p.id)+'\','+(p.ativo===false||p.active===false?'true':'false')+')">'+(p.ativo===false||p.active===false?'Reativar':'Desativar')+'</button>'))+'</td></tr>').join('')+'</table>')+
+ '<div class="actions"><button type="button" onclick="carregarEquipeGestor()">Atualizar lista</button></div></div>';
+}
+async function executarGestaoVendedor(payload){
+ if(user!=='gestor'||!perfilAtual)throw Error('Somente o gestor pode realizar esta ação.');
+ if(!navigator.onLine)throw Error('Conecte-se à internet para administrar vendedores.');
+ const {data,error}=await sb.functions.invoke('gestao-vendedores',{body:payload});
+ if(error)throw Error(error.message||'Função administrativa indisponível. Publique gestao-vendedores no Supabase.');
+ if(data?.error)throw Error(data.error);
+ return data;
+}
+async function criarVendedorGestor(e){
+ e.preventDefault();const f=e.target,btn=f.querySelector('button[type=submit]');btn.disabled=true;
+ try{const d=new FormData(f);await executarGestaoVendedor({acao:'convidar',nome:String(d.get('nome')||'').trim(),email:String(d.get('email')||'').trim()});alert('Convite enviado.');f.reset();await carregarEquipeGestor();}
+ catch(err){alert('Não foi possível convidar: '+(err.message||err));}finally{btn.disabled=false;}
+}
+async function alternarVendedorGestor(id,reativar){
+ const p=equipeGestor.find(x=>x.id===id);if(!p||id===perfilAtual.id)return;
+ if(!confirm((reativar?'Reativar':'Desativar')+' acesso de '+(p.nome||p.email||id)+'? O histórico será preservado.'))return;
+ try{await executarGestaoVendedor({acao:reativar?'reativar':'desativar',id});alert('Acesso atualizado.');await carregarEquipeGestor();}
+ catch(err){alert('Não foi possível atualizar acesso: '+(err.message||err));}
+}
+async function carregarEquipeGestor(){
+ if(user!=='gestor'||!perfilAtual||!sb)return;
+ equipeCarregando=true;equipeErro='';if(tab==='equipe')render();
+ try{const {data,error}=await sb.from('profiles').select('*');if(error)throw error;equipeGestor=data||[];}
+ catch(e){equipeErro='Não foi possível consultar os perfis: '+(e.message||String(e));}
+ finally{equipeCarregando=false;if(tab==='equipe')render();}
 }
 function dados(){return '<h2>Dados e segurança</h2><div class="panel"><h3>Registros no Supabase</h3><p>Produtores, fazendas, visitas e fotos, oportunidades, vendas e metas são consultados e cadastrados no banco Supabase. O acesso aos registros depende das políticas de segurança (RLS) configuradas no banco.</p><p class="muted">Exportação e restauração de dados ainda não foram disponibilizadas nesta versão para evitar gerar backups incompletos ou demonstrativos.</p></div>'}
 function add(e,k){e.preventDefault();const d=Object.fromEntries(new FormData(e.target));if(!d.vendedor||!names[d.vendedor]||d.vendedor==='gestor')return alert('Vendedor inválido');if(user!=='gestor')d.vendedor=user;if(k!=='clients'&&!clients().some(c=>c.id==d.cliente))return alert('Cliente inválido');for(let f of ['cliente','hectares','potencial','valor','lat','lng'])if(d[f]!==undefined)d[f]=Number(d[f]);d.id=Math.max(0,...db[k].map(x=>x.id))+1;db[k].push(d);save();render()}function remove(k,id){const item=db[k].find(x=>x.id===id);if(!item||!visible(item))return;if(k==='clients'&&(db.deals.some(x=>x.cliente===id)||db.visits.some(x=>x.cliente===id)))return alert('Exclua primeiro as visitas e oportunidades vinculadas.');if(confirm('Excluir este registro?')){db[k]=db[k].filter(x=>x.id!==id);save();render()}}function updateGoals(e){e.preventDefault();for(const [k,v] of new FormData(e.target))db.goals[k]=Math.max(0,Number(v));save();render()}
