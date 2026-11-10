@@ -138,9 +138,17 @@ async function salvarVisitaReal(event){
   const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-zA-Z0-9]/g,'').toLowerCase().slice(0,8)||'jpg';
   const path=cliente.vendedor_id+'/'+visita.id+'/'+crypto.randomUUID()+'.'+ext;
   const up=await sb.storage.from('fotos-visitas').upload(path,file,{contentType:file.type,upsert:false});
-  if(up.error){erros.push(file.name+': '+up.error.message);continue;}
+  if(up.error){
+   try{await CultivarOffline.enqueue('foto_pendente',perfilAtual.id,{visita_id:visita.id,vendedor_id:cliente.vendedor_id},[file]);erros.push(file.name+': envio pendente, foto preservada neste aparelho');}
+   catch(e){erros.push(file.name+': '+up.error.message+'; falha ao guardar offline: '+(e.message||e));}
+   continue;
+  }
   const meta=await sb.from('visitas_fotos').insert({visita_id:visita.id,vendedor_id:cliente.vendedor_id,caminho_arquivo:path});
-  if(meta.error){await sb.storage.from('fotos-visitas').remove([path]);erros.push(file.name+': '+meta.error.message);}
+  if(meta.error){
+   await sb.storage.from('fotos-visitas').remove([path]);
+   try{await CultivarOffline.enqueue('foto_pendente',perfilAtual.id,{visita_id:visita.id,vendedor_id:cliente.vendedor_id},[file]);erros.push(file.name+': cadastro pendente, foto preservada neste aparelho');}
+   catch(e){erros.push(file.name+': '+meta.error.message+'; falha ao guardar offline: '+(e.message||e));}
+  }
  }
  await loadVisitasSupabase();
  if(erros.length)alert('Visita salva, mas algumas fotos falharam: '+erros.join('; '));

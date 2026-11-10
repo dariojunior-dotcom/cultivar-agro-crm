@@ -22,6 +22,26 @@
       const {data:existing,error:lookupError}=await sb.from('oportunidades').select('id').eq('id',item.id).maybeSingle();
       if(lookupError)throw Error('Consulta do registro no Supabase: '+(lookupError.message||String(lookupError)));
       if(!existing){const {error}=await sb.from('oportunidades').insert({...item.payload,id:item.id});if(error)throw Error('Gravação da oportunidade: '+(error.message||String(error)))}
+     }else if(item.type==='foto_pendente'){
+      const {visita_id,vendedor_id}=item.payload;
+      if(!visita_id||!vendedor_id||item.files.length!==1)throw Error('Foto pendente incompleta.');
+      const {data:visit,error:visitError}=await sb.from('visitas').select('id,vendedor_id').eq('id',visita_id).single();
+      if(visitError||!visit||visit.vendedor_id!==vendedor_id)throw Error('Visita indisponível ou sem autorização.');
+      const file=item.files[0];
+      if(!(file instanceof Blob)||!file.size||file.size>10*1024*1024||!file.type.startsWith('image/'))throw Error('Imagem pendente inválida.');
+      const {count,error:countError}=await sb.from('visitas_fotos').select('id',{count:'exact',head:true}).eq('visita_id',visita_id);
+      if(countError)throw countError;
+      const ext=(file.name?.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').slice(0,8)||'jpg';
+      const path=vendedor_id+'/'+visita_id+'/'+item.id+'.'+ext;
+      const {data:existing,error:lookupError}=await sb.from('visitas_fotos').select('id').eq('caminho_arquivo',path).maybeSingle();
+      if(lookupError)throw lookupError;
+      if(!existing){
+       if(count>=10)throw Error('Limite de 10 fotos atingido; foto preservada na fila.');
+       const {error:uploadError}=await sb.storage.from('fotos-visitas').upload(path,file,{contentType:file.type,upsert:false});
+       if(uploadError&&!/already exists|duplicate/i.test(uploadError.message||''))throw uploadError;
+       const {error:insertError}=await sb.from('visitas_fotos').insert({visita_id,vendedor_id,caminho_arquivo:path});
+       if(insertError)throw insertError;
+      }
      }else if(item.type==='visita'){
       const {data:existing,error:lookupError}=await sb.from('visitas').select('id').eq('id',item.id).maybeSingle();
       if(lookupError)throw lookupError;
