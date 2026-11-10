@@ -157,7 +157,6 @@ async function salvarVisitaReal(event){
  finally{button.disabled=false}
 }
 async function anexarFotoVisita(id){
- if(!navigator.onLine){alert('Conecte-se à internet para anexar fotos a uma visita existente.');return;}
  const visita=visitasReais.find(v=>v.id===id);
  if(!visita||!perfilAtual){alert('Visita não encontrada.');return;}
  if(user!=='gestor'&&visita.vendedor_id!==perfilAtual.id){alert('Acesso não autorizado à visita.');return;}
@@ -180,6 +179,15 @@ async function processarFotosSelecionadas(id,files){
   if(existentes+files.length>10){alert('Limite de 10 fotos por visita. Restam '+(10-existentes)+' vagas.');return;}
   if(files.some(f=>!f.type.startsWith('image/')||f.size>10*1024*1024)){alert('Cada foto deve ser uma imagem de até 10 MB.');return;}
   if(!confirm('Anexar '+files.length+' foto(s) à visita existente? Isso não cria outra visita.'))return;
+  if(!navigator.onLine){
+   if(!window.CultivarOffline||!perfilAtual)throw Error('Armazenamento offline indisponível.');
+   const pendentes=await CultivarOffline.pending(perfilAtual.id);
+   const jaGuardadas=pendentes.filter(p=>p.type==='foto_pendente'&&p.payload?.visita_id===id).reduce((total,p)=>total+p.files.length,0);
+   if(existentes+jaGuardadas+files.length>10)throw Error('Limite de 10 fotos por visita, incluindo fotos pendentes.');
+   for(const file of files)await CultivarOffline.enqueue('foto_pendente',perfilAtual.id,{visita_id:id,vendedor_id:visita.vendedor_id},[file]);
+   alert(files.length+' foto(s) guardada(s) neste aparelho para esta visita. Sincronize ao voltar a internet. Não limpe os dados do navegador.');
+   return;
+  }
   let enviados=0,erros=[];
   for(const file of files){
    const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').toLowerCase().slice(0,8)||'jpg';
@@ -190,7 +198,12 @@ async function processarFotosSelecionadas(id,files){
     const {error:meta}=await sb.from('visitas_fotos').insert({visita_id:id,vendedor_id:visita.vendedor_id,caminho_arquivo:path});
     if(meta){await sb.storage.from('fotos-visitas').remove([path]);throw meta;}
     enviados++;
-   }catch(e){erros.push(file.name+': '+(e.message||e));}
+   }catch(e){
+    if(window.CultivarOffline&&perfilAtual){
+     try{await CultivarOffline.enqueue('foto_pendente',perfilAtual.id,{visita_id:id,vendedor_id:visita.vendedor_id},[file]);erros.push(file.name+': envio pendente, foto preservada no aparelho');}
+     catch(saveError){erros.push(file.name+': '+(e.message||e)+'; não foi possível guardar offline: '+(saveError.message||saveError));}
+    }else erros.push(file.name+': '+(e.message||e));
+   }
   }
   await loadVisitasSupabase();
   alert(enviados+' foto(s) anexada(s).'+(erros.length?' Falhas: '+erros.join('; '):''));
