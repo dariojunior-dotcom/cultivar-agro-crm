@@ -109,7 +109,7 @@ function visitasPage(){
  '</div><div class="actions"><button type="submit" '+(visitasCarregando||!visitasClientes.length?'disabled':'')+'>Salvar visita no Supabase</button></div></form></div>'+
  '<div class="panel"><h3>Histórico real</h3>'+(visitasCarregando?'<p>Carregando...</p>':visitasErro?'<p class="error">'+esc(visitasErro)+'</p>':
  '<p>'+visitasReais.length+' visita(s) encontrada(s).</p><table><tr><th>Data</th><th>Produtor</th><th>Fazenda</th><th>Assunto</th><th>Fotos</th></tr>'+
- visitasReais.map(v=>'<tr><td>'+esc(new Date(v.realizada_em).toLocaleString('pt-BR'))+'</td><td>'+esc(visitasClientes.find(c=>c.id===v.cliente_id)?.nome||'—')+'</td><td>'+esc(visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome||'—')+'</td><td>'+esc(v.assunto||'')+'</td><td><button type="button" onclick="abrirFotosVisita(\''+esc(v.id)+'\')">Ver fotos ('+visitasFotos.filter(p=>p.visita_id===v.id).length+')</button> <button type="button" class="alt" onclick="anexarFotoVisita(\''+esc(v.id)+'\')">Anexar foto</button></td></tr>').join('')+'</table>')+'</div>';
+ visitasReais.map(v=>'<tr><td>'+esc(new Date(v.realizada_em).toLocaleString('pt-BR'))+'</td><td>'+esc(visitasClientes.find(c=>c.id===v.cliente_id)?.nome||'—')+'</td><td>'+esc(visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome||'—')+'</td><td>'+esc(v.assunto||'')+'</td><td><button type="button" onclick="abrirRelatorioVisita(\''+esc(v.id)+'\')">Ver relatório</button> <button type="button" onclick="abrirFotosVisita(\''+esc(v.id)+'\')">Ver fotos ('+visitasFotos.filter(p=>p.visita_id===v.id).length+')</button> <button type="button" class="alt" onclick="anexarFotoVisita(\''+esc(v.id)+'\')">Anexar foto</button></td></tr>').join('')+'</table>')+'</div>';
 }
 function filtrarFazendasVisita(form){const id=form.elements.cliente_id.value,sel=form.elements.fazenda_id;sel.value='';Array.from(sel.options).forEach(o=>{if(o.value)o.hidden=o.dataset.cliente!==id})}
 async function loadVisitasSupabase(){
@@ -230,6 +230,20 @@ async function processarFotosSelecionadas(id,files){
   }
   await loadVisitasSupabase();
   alert(enviados+' foto(s) anexada(s).'+(erros.length?' Falhas: '+erros.join('; '):''));
+}
+function abrirRelatorioVisita(id){
+ const v=visitasReais.find(x=>x.id===id);
+ if(!v){alert('Visita não encontrada.');return;}
+ document.getElementById('relatorioVisita')?.remove();
+ const overlay=document.createElement('div');overlay.id='relatorioVisita';
+ overlay.style.cssText='position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;padding:12px';
+ const painel=document.createElement('div');painel.style.cssText='background:#fff;color:#20352b;padding:20px;border-radius:12px;max-height:90vh;overflow:auto;width:min(95vw,720px)';
+ const titulo=document.createElement('h2');titulo.textContent='Relatório da visita';painel.append(titulo);
+ const dados=[['Data',new Date(v.realizada_em).toLocaleString('pt-BR')],['Produtor',visitasClientes.find(c=>c.id===v.cliente_id)?.nome||'—'],['Fazenda',visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome||'—'],['Assunto',v.assunto||'—'],['Observações e resultado',v.observacoes||'Não informado'],['Próxima visita',v.proxima_visita_em?new Date(v.proxima_visita_em).toLocaleDateString('pt-BR'):'Não agendada'],['Quantidade de fotos',String(visitasFotos.filter(f=>f.visita_id===id).length)]];
+ for(const [nome,valor] of dados){const p=document.createElement('p');p.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere';const strong=document.createElement('strong');strong.textContent=nome+': ';p.append(strong,document.createTextNode(String(valor)));painel.append(p);}
+ const fechar=document.createElement('button');fechar.type='button';fechar.textContent='Fechar';fechar.onclick=()=>overlay.remove();
+ const fotos=document.createElement('button');fotos.type='button';fotos.textContent='Ver fotos';fotos.onclick=()=>{overlay.remove();abrirFotosVisita(id);};
+ painel.append(fechar,document.createTextNode(' '),fotos);overlay.append(painel);overlay.onclick=e=>{if(e.target===overlay)overlay.remove();};document.body.append(overlay);
 }
 async function abrirFotosVisita(id){
  const fotos=visitasFotos.filter(p=>p.visita_id===id);
