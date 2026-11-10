@@ -437,10 +437,29 @@ let equipeGestor=[],equipeErro='',equipeCarregando=false;
 function paginaEquipeGestor(){
  if(user!=='gestor')return '<h2>Acesso restrito ao gestor</h2>';
  return '<h2>Gestão de vendedores</h2><div class="panel"><h3>Equipe cadastrada</h3>'+
- '<p class="muted">Os cadastros e acessos são controlados pelo Supabase. Para proteger os dados, criação, desativação e transferência de carteira serão habilitadas após configurar e validar as permissões administrativas no servidor.</p>'+
+ '<p class="muted">Ações administrativas exigem conexão e a função segura de gestão publicada no Supabase. Desativar bloqueia o acesso sem apagar histórico.</p>'+'<form onsubmit="criarVendedorGestor(event)"><div class="fields"><div class="field"><label>Nome do novo vendedor</label><input name="nome" required></div><div class="field"><label>E-mail do novo vendedor</label><input name="email" type="email" required></div></div><button type="submit">Convidar vendedor</button></form>'+
  (equipeCarregando?'<p>Carregando equipe...</p>':equipeErro?'<p class="error">'+esc(equipeErro)+'</p>':
- '<table><tr><th>Nome</th><th>E-mail</th><th>Perfil</th></tr>'+equipeGestor.map(p=>'<tr><td>'+esc(p.nome||p.name||'—')+'</td><td>'+esc(p.email||'—')+'</td><td>'+esc(p.role||p.papel||'—')+'</td></tr>').join('')+'</table>')+
+ '<table><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Ações</th></tr>'+equipeGestor.map(p=>'<tr><td>'+esc(p.nome||p.name||'—')+'</td><td>'+esc(p.email||'—')+'</td><td>'+esc(p.role||p.papel||'—')+'</td><td>'+(p.id===perfilAtual.id?'Seu perfil':('<button type="button" onclick="alternarVendedorGestor(\''+esc(p.id)+'\','+(p.ativo===false||p.active===false?'true':'false')+')">'+(p.ativo===false||p.active===false?'Reativar':'Desativar')+'</button>'))+'</td></tr>').join('')+'</table>')+
  '<div class="actions"><button type="button" onclick="carregarEquipeGestor()">Atualizar lista</button></div></div>';
+}
+async function executarGestaoVendedor(payload){
+ if(user!=='gestor'||!perfilAtual)throw Error('Somente o gestor pode realizar esta ação.');
+ if(!navigator.onLine)throw Error('Conecte-se à internet para administrar vendedores.');
+ const {data,error}=await sb.functions.invoke('gestao-vendedores',{body:payload});
+ if(error)throw Error(error.message||'Função administrativa indisponível. Publique gestao-vendedores no Supabase.');
+ if(data?.error)throw Error(data.error);
+ return data;
+}
+async function criarVendedorGestor(e){
+ e.preventDefault();const f=e.target,btn=f.querySelector('button[type=submit]');btn.disabled=true;
+ try{const d=new FormData(f);await executarGestaoVendedor({acao:'convidar',nome:String(d.get('nome')||'').trim(),email:String(d.get('email')||'').trim()});alert('Convite enviado.');f.reset();await carregarEquipeGestor();}
+ catch(err){alert('Não foi possível convidar: '+(err.message||err));}finally{btn.disabled=false;}
+}
+async function alternarVendedorGestor(id,reativar){
+ const p=equipeGestor.find(x=>x.id===id);if(!p||id===perfilAtual.id)return;
+ if(!confirm((reativar?'Reativar':'Desativar')+' acesso de '+(p.nome||p.email||id)+'? O histórico será preservado.'))return;
+ try{await executarGestaoVendedor({acao:reativar?'reativar':'desativar',id});alert('Acesso atualizado.');await carregarEquipeGestor();}
+ catch(err){alert('Não foi possível atualizar acesso: '+(err.message||err));}
 }
 async function carregarEquipeGestor(){
  if(user!=='gestor'||!perfilAtual||!sb)return;
