@@ -34,10 +34,15 @@ serve(async(req)=>{
    const {data,error}=await admin.auth.admin.inviteUserByEmail(email,{data:{nome}});
    if(error)return reply({error:error.message},400);
    if(!data.user?.id)return reply({error:"Convite sem usuário retornado"},500);
-   const {error:profileError}=await admin.from("profiles").upsert({id:data.user.id,nome,papel:"vendedor",ativo:true,gestor_id:user.id},{onConflict:"id"});
+   const {data:existing,error:readError}=await admin.from("profiles").select("id,papel").eq("id",data.user.id).maybeSingle();
+   if(readError)return reply({error:"Convite criado, mas perfil não verificado: "+readError.message},500);
+   if(existing && existing.papel!=="vendedor")return reply({error:"Convite criado, mas o perfil existente não é vendedor; nenhuma permissão alterada"},409);
+   const {error:profileError}=existing
+    ? await admin.from("profiles").update({nome,gestor_id:user.id}).eq("id",data.user.id).eq("papel","vendedor")
+    : await admin.from("profiles").insert({id:data.user.id,nome,papel:"vendedor",ativo:true,gestor_id:user.id});
    if(profileError)return reply({error:"Convite criado, mas vínculo de equipe não concluído: "+profileError.message},500);
    // Profile creation depends on the existing auth trigger/schema; do not grant permissions client-side.
-   return reply({ok:true,id:data.user?.id,warning:"Confirme que o gatilho de perfis criou o vendedor com papel correto."});
+   return reply({ok:true,id:data.user.id});
   }
   if(acao==="desativar"||acao==="reativar"){
    const id=String(body.id||"");

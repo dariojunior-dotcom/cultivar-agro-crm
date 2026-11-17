@@ -13,7 +13,7 @@ DO $$ BEGIN
 END $$;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS gestor_id uuid REFERENCES public.profiles(id);
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS administrador_geral boolean NOT NULL DEFAULT false;
-UPDATE public.profiles SET administrador_geral=true WHERE papel='gestor' AND ativo IS TRUE;
+UPDATE public.profiles SET administrador_geral=true WHERE papel='gestor' AND ativo IS TRUE AND administrador_geral IS FALSE;
 CREATE OR REPLACE FUNCTION public.is_general_admin() RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO ''
 AS $f$ SELECT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id=(SELECT auth.uid()) AND p.ativo IS TRUE AND p.papel='gestor' AND p.administrador_geral IS TRUE) $f$;
@@ -41,6 +41,16 @@ AS $f$
    AND EXISTS (SELECT 1 FROM public.profiles g WHERE g.id=(SELECT auth.uid()) AND g.papel='gestor' AND g.ativo IS TRUE))
  )
 $f$;
+-- Conferir se nenhuma politica inesperada de leitura ignora o isolamento.
+DO $ BEGIN
+ IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='profiles' AND policyname <> 'profiles_select')
+ OR EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='visitas_fotos' AND policyname NOT IN ('visitas_fotos_insert','visitas_fotos_select'))
+ OR EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='storage' AND tablename='objects'
+    AND (policyname ILIKE '%fotos%' OR coalesce(qual,'') ILIKE '%fotos-visitas%' OR coalesce(with_check,'') ILIKE '%fotos-visitas%')
+    AND policyname NOT IN ('fotos_visitas_gestor_select 1fudp7j_0','fotos_visitas_insert 1fudp7j_0','fotos_visitas_insert_gestor','fotos_visitas_select 1fudp7j_0')) THEN
+  RAISE EXCEPTION 'Politicas inesperadas detectadas. Reauditar antes de ativar.';
+ END IF;
+END $;
 DROP POLICY IF EXISTS profiles_select ON public.profiles;
 CREATE POLICY profiles_select ON public.profiles FOR SELECT TO authenticated
  USING (public.can_read_profile(id));
@@ -69,5 +79,6 @@ REVOKE ALL ON FUNCTION public.can_read_profile(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.is_general_admin() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.can_read_profile(uuid) TO authenticated;
 COMMIT;
+-- A migracao nao cria o usuario Diego. Ele deve ser convidado depois, com e-mail proprio.
 -- POS-IMPLANTACAO: publicar Edge Function gestao-vendedores; testar com 3 perfis.
 -- ATENCAO: mudar gestor_id nao altera vendedor_id nos registros historicos.

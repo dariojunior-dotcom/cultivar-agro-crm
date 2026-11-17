@@ -497,7 +497,7 @@ function paginaEquipeGestor(){
  return '<h2>Gestão de vendedores</h2><div class="panel"><h3>Equipe cadastrada</h3>'+
  '<p class="muted">Ações administrativas exigem conexão e a função segura de gestão publicada no Supabase. Desativar bloqueia o acesso sem apagar histórico.</p>'+'<form onsubmit="criarVendedorGestor(event)"><div class="fields"><div class="field"><label>Nome do novo vendedor</label><input name="nome" required></div><div class="field"><label>E-mail do novo vendedor</label><input name="email" type="email" required></div></div><button type="submit">Convidar vendedor</button></form>'+
  (equipeCarregando?'<p>Carregando equipe...</p>':equipeErro?'<p class="error">'+esc(equipeErro)+'</p>':
- '<table><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Ações</th></tr>'+equipeGestor.map(p=>'<tr><td>'+esc(p.nome||p.name||'—')+'</td><td>'+esc(p.email||'—')+'</td><td>'+esc(p.role||p.papel||'—')+'</td><td>'+(p.id===perfilAtual.id?'Seu perfil':('<button type="button" onclick="alternarVendedorGestor(\''+esc(p.id)+'\','+(p.ativo===false||p.active===false?'true':'false')+')">'+(p.ativo===false||p.active===false?'Reativar':'Desativar')+'</button>'))+'</td></tr>').join('')+'</table>')+
+ '<table><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Equipe</th><th>Ações</th></tr>'+equipeGestor.map(p=>'<tr><td>'+esc(p.nome||p.name||'—')+'</td><td>'+esc(p.email||'—')+'</td><td>'+esc(p.papel||'—')+'</td><td>'+esc((equipeGestor.find(g=>g.id===p.gestor_id)||{}).nome||'—')+'</td><td>'+(p.id===perfilAtual.id?'Seu perfil':(p.papel==='vendedor'?'<button type="button" onclick="alternarVendedorGestor('+JSON.stringify(p.id)+','+(p.ativo===false?'true':'false')+')">'+(p.ativo===false?'Reativar':'Desativar')+'</button>'+(perfilAtual.administrador_geral===true?'<button type="button" onclick="transferirVendedorGestor('+JSON.stringify(p.id)+')">Transferir</button>':''):'—'))+'</td></tr>').join('')+'</table>')+
  '<div class="actions"><button type="button" onclick="carregarEquipeGestor()">Atualizar lista</button></div></div>';
 }
 async function executarGestaoVendedor(payload){
@@ -518,6 +518,17 @@ async function alternarVendedorGestor(id,reativar){
  if(!confirm((reativar?'Reativar':'Desativar')+' acesso de '+(p.nome||p.email||id)+'? O histórico será preservado.'))return;
  try{await executarGestaoVendedor({acao:reativar?'reativar':'desativar',id});alert('Acesso atualizado.');await carregarEquipeGestor();}
  catch(err){alert('Não foi possível atualizar acesso: '+(err.message||err));}
+}
+async function transferirVendedorGestor(id){
+ if(perfilAtual?.administrador_geral!==true)return alert('Somente o Administrador Geral pode transferir.');
+ const gestores=equipeGestor.filter(p=>p.papel==='gestor'&&p.ativo===true);
+ const opcoes=gestores.map(p=>(p.nome||'Gestor')+' — '+p.id).join('\n');
+ const destino=prompt('Cole o ID do gestor de destino:\n'+opcoes);
+ if(!destino)return;
+ if(!gestores.some(p=>p.id===destino.trim()))return alert('Gestor de destino inválido.');
+ if(!confirm('Transferir vendedor e preservar todo o histórico?'))return;
+ try{await executarGestaoVendedor({acao:'transferir',id,gestor_id:destino.trim()});await carregarEquipeGestor();alert('Transferência concluída.');}
+ catch(e){alert('Transferência não realizada: '+(e.message||e));}
 }
 async function carregarEquipeGestor(){
  if(user!=='gestor'||!perfilAtual||!sb)return;
