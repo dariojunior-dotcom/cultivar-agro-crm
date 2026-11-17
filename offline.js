@@ -23,7 +23,7 @@
       if(lookupError)throw Error('Consulta do registro no Supabase: '+(lookupError.message||String(lookupError)));
       if(!existing){const {error}=await sb.from('oportunidades').insert({...item.payload,id:item.id});if(error)throw Error('Gravação da oportunidade: '+(error.message||String(error)))}
      }else if(item.type==='foto_pendente'){
-      const {visita_id,vendedor_id}=item.payload;
+      const {visita_id,vendedor_id,descricao=''}=item.payload;
       if(!visita_id||!vendedor_id||item.files.length!==1)throw Error('Foto pendente incompleta.');
       const {data:visit,error:visitError}=await sb.from('visitas').select('id,vendedor_id').eq('id',visita_id).single();
       if(visitError||!visit||visit.vendedor_id!==vendedor_id)throw Error('Visita indisponível ou sem autorização.');
@@ -39,13 +39,13 @@
        if(count>=10)throw Error('Limite de 10 fotos atingido; foto preservada na fila.');
        const {error:uploadError}=await sb.storage.from('fotos-visitas').upload(path,file,{contentType:file.type,upsert:false});
        if(uploadError&&!/already exists|duplicate/i.test(uploadError.message||''))throw uploadError;
-       const {error:insertError}=await sb.from('visitas_fotos').insert({visita_id,vendedor_id,caminho_arquivo:path});
+       const {error:insertError}=await sb.from('visitas_fotos').insert({visita_id,vendedor_id,caminho_arquivo:path,descricao:String(descricao||'').slice(0,500)});
        if(insertError)throw insertError;
       }
      }else if(item.type==='visita'){
       const {data:existing,error:lookupError}=await sb.from('visitas').select('id').eq('id',item.id).maybeSingle();
       if(lookupError)throw lookupError;
-      if(!existing){const {error}=await sb.from('visitas').insert({...item.payload,id:item.id});if(error)throw Error('Gravação da visita: '+(error.message||String(error)))}
+      if(!existing){const {descricoes_fotos,...dadosVisita}=item.payload;const {error}=await sb.from('visitas').insert({...dadosVisita,id:item.id});if(error)throw Error('Gravação da visita: '+(error.message||String(error)))}
       for(let n=0;n<item.files.length;n++){
        const file=item.files[n];
        const filename=typeof file?.name==='string'?file.name:'foto.jpg';
@@ -68,7 +68,7 @@
        if(!meta){
         const {error:uploadErr}=await sb.storage.from('fotos-visitas').upload(path,bytes,{contentType:file?.type||'image/jpeg',upsert:false});
         if(uploadErr&&!/already exists|duplicate/i.test(uploadErr.message||''))throw Error('Envio da foto '+(n+1)+' ao Storage: '+(uploadErr.message||String(uploadErr)));
-        const {error:insertErr}=await sb.from('visitas_fotos').insert({visita_id:item.id,vendedor_id:item.payload.vendedor_id,caminho_arquivo:path});
+        const {error:insertErr}=await sb.from('visitas_fotos').insert({visita_id:item.id,vendedor_id:item.payload.vendedor_id,caminho_arquivo:path,descricao:String(item.payload.descricoes_fotos?.[n]||'').slice(0,500)});
         if(insertErr)throw Error('Cadastro da foto '+(n+1)+' no Supabase: '+(insertErr.message||String(insertErr)));
        }
       }
