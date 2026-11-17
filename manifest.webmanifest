@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "Cultivar Agro — CRM Comercial",
+  "short_name": "Cultivar Agro",
+  "description": "Gestão comercial agrícola: produtores, fazendas, visitas e oportunidades.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f3f6f3",
+  "theme_color": "#124b32",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "./icons/cultivar.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
