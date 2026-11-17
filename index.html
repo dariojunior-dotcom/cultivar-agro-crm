@@ -108,8 +108,8 @@ function visitasPage(){
  '<div class="field wide"><label>GPS (somente com permissão)</label><div class="geo"><button type="button" onclick="captureGPS(this)">📍 Capturar localização</button><span id="gpsStatus" class="muted">Nenhuma localização registrada</span></div><input type="hidden" name="lat"><input type="hidden" name="lng"></div>'+
  '</div><div class="actions"><button type="submit" '+(visitasCarregando||!visitasClientes.length?'disabled':'')+'>Salvar visita no Supabase</button></div></form></div>'+
  '<div class="panel"><h3>Histórico real</h3>'+(visitasCarregando?'<p>Carregando...</p>':visitasErro?'<p class="error">'+esc(visitasErro)+'</p>':
- '<p>'+visitasReais.length+' visita(s) encontrada(s).</p><table><tr><th>Data</th><th>Produtor</th><th>Fazenda</th><th>Assunto</th><th>Fotos</th></tr>'+
- visitasReais.map(v=>'<tr><td>'+esc(new Date(v.realizada_em).toLocaleString('pt-BR'))+'</td><td>'+esc(visitasClientes.find(c=>c.id===v.cliente_id)?.nome||'—')+'</td><td>'+esc(visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome||'—')+'</td><td>'+esc(v.assunto||'')+'</td><td><button type="button" onclick="abrirRelatorioVisita(\''+esc(v.id)+'\')">Ver relatório</button> <button type="button" onclick="abrirFotosVisita(\''+esc(v.id)+'\')">Ver fotos ('+visitasFotos.filter(p=>p.visita_id===v.id).length+')</button> <button type="button" class="alt" onclick="anexarFotoVisita(\''+esc(v.id)+'\')">Anexar foto</button></td></tr>').join('')+'</table>')+'</div>';
+ '<p>'+visitasReais.length+' visita(s) encontrada(s).</p><div class="actions"><button type="button" onclick="exportarPDFVisitasGerencial()">Exportar relatório gerencial em PDF</button></div><table><tr><th>Data</th><th>Produtor</th><th>Fazenda</th><th>Assunto</th><th>Fotos</th></tr>'+
+ visitasReais.map(v=>'<tr><td>'+esc(new Date(v.realizada_em).toLocaleString('pt-BR'))+'</td><td>'+esc(visitasClientes.find(c=>c.id===v.cliente_id)?.nome||'—')+'</td><td>'+esc(visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome||'—')+'</td><td>'+esc(v.assunto||'')+'</td><td><button type="button" onclick="abrirRelatorioVisita(\''+esc(v.id)+'\')">Ver relatório</button> <button type="button" class="alt" onclick="exportarPDFVisita(\''+esc(v.id)+'\')">Exportar PDF</button> <button type="button" onclick="abrirFotosVisita(\''+esc(v.id)+'\')">Ver fotos ('+visitasFotos.filter(p=>p.visita_id===v.id).length+')</button> <button type="button" class="alt" onclick="anexarFotoVisita(\''+esc(v.id)+'\')">Anexar foto</button></td></tr>').join('')+'</table>')+'</div>';
 }
 function filtrarFazendasVisita(form){const id=form.elements.cliente_id.value,sel=form.elements.fazenda_id;sel.value='';Array.from(sel.options).forEach(o=>{if(o.value)o.hidden=o.dataset.cliente!==id})}
 async function loadVisitasSupabase(){
@@ -231,6 +231,62 @@ async function processarFotosSelecionadas(id,files){
   await loadVisitasSupabase();
   alert(enviados+' foto(s) anexada(s).'+(erros.length?' Falhas: '+erros.join('; '):''));
 }
+
+function pdfEsc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function pdfJanela(){
+ const janela=window.open('','_blank');
+ if(!janela){alert('Permita pop-ups para gerar o PDF e tente novamente.');return null;}
+ janela.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório Cultivar Agro</title><style>body{font:14px Arial,sans-serif;color:#183c2b;max-width:900px;margin:32px auto;padding:0 18px}h1{font-size:22px;border-bottom:3px solid #17623f;padding-bottom:12px}h2{font-size:17px;margin-top:24px}.info{padding:12px;background:#f2f6f2;margin:14px 0}table{border-collapse:collapse;width:100%;font-size:12px}td,th{border:1px solid #c9d6cc;padding:8px;text-align:left;vertical-align:top}th{background:#e9f0e9}.foto{max-width:100%;max-height:360px;object-fit:contain;display:block;margin:12px auto}.page{break-before:page}.actions{margin:20px 0}@media print{.actions{display:none}body{margin:0;max-width:none}.foto{break-inside:avoid}}</style></head><body><h1>CULTIVAR AGRO — Relatório de Visitas</h1><p>Preparando relatório...</p></body></html>');
+ janela.document.close();return janela;
+}
+function pdfAbrirImpressao(janela,conteudo){
+ janela.document.body.innerHTML='<h1>CULTIVAR AGRO — Relatório de Visitas</h1>'+conteudo+'<div class="actions"><button onclick="window.print()">Imprimir / Salvar como PDF</button></div>';
+ janela.focus();
+}
+function pdfLinha(nome,valor){return '<tr><th>'+pdfEsc(nome)+'</th><td style="white-space:pre-wrap;overflow-wrap:anywhere">'+pdfEsc(valor||'—')+'</td></tr>';}
+function pdfNomeVendedor(v){
+ const id=v.vendedor_id;const equipe=typeof oportunidadesEquipe!=='undefined'?oportunidadesEquipe:[];
+ const lista=Array.isArray(equipe)?equipe:[];
+ return lista.find(p=>p.id===id)?.nome||id||'Não informado';
+}
+function pdfDetalhesVisita(v){
+ return '<table>'+pdfLinha('Data',new Date(v.realizada_em).toLocaleString('pt-BR'))+pdfLinha('Cliente / produtor',visitasClientes.find(c=>c.id===v.cliente_id)?.nome)+pdfLinha('Fazenda',visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome)+pdfLinha('Vendedor',pdfNomeVendedor(v))+pdfLinha('Assunto',v.assunto)+pdfLinha('Observações e resultado',v.observacoes)+pdfLinha('Próximo contato',v.proxima_visita_em?String(v.proxima_visita_em).slice(0,10).split('-').reverse().join('/'):'Não agendado')+'</table>';
+}
+function pdfArquivoParaDataURL(arquivo){
+ return new Promise((resolve,reject)=>{const leitor=new FileReader();leitor.onload=()=>resolve(leitor.result);leitor.onerror=()=>reject(Error('Não foi possível ler a foto.'));leitor.readAsDataURL(arquivo);});
+}
+async function exportarPDFVisita(id){
+ const v=visitasReais.find(x=>x.id===id);if(!v){alert('Visita não encontrada.');return;}
+ const janela=pdfJanela();if(!janela)return;
+ const fotos=visitasFotos.filter(f=>f.visita_id===id).slice(0,10);
+ let imagens='',falhas=0;
+ for(let i=0;i<fotos.length;i++){
+  try{
+   const caminho=fotos[i].caminho_arquivo;
+   if(!caminho)throw Error('Caminho ausente');
+   const {data,error}=await sb.storage.from('fotos-visitas').download(caminho);
+   if(error||!data)throw Error(error?.message||'Foto indisponível');
+   const url=await pdfArquivoParaDataURL(data);
+   imagens+='<figure><img class="foto" src="'+url+'" alt="Foto da visita '+(i+1)+'"><figcaption>Foto '+(i+1)+' de '+fotos.length+'</figcaption></figure>';
+  }catch(e){falhas++;}
+ }
+ pdfAbrirImpressao(janela,'<p>Emitido em '+pdfEsc(new Date().toLocaleString('pt-BR'))+'</p>'+pdfDetalhesVisita(v)+'<h2>Fotos ('+fotos.length+')</h2>'+(imagens||'<p>Sem fotos disponíveis.</p>')+(falhas?'<p>Atenção: '+falhas+' foto(s) não puderam ser incluídas. Confira antes de salvar.</p>':''));
+}
+function exportarPDFVisitasGerencial(){
+ const janela=pdfJanela();if(!janela)return;
+ const hoje=new Date(),inicio=new Date(hoje.getFullYear(),hoje.getMonth(),1).toISOString().slice(0,10);
+ const nomes=[...new Map(visitasReais.map(v=>[v.vendedor_id,pdfNomeVendedor(v)])).entries()];
+ const filtroVendedor=user==='gestor'?'<label>Vendedor <select id="pdfVendedor"><option value="">Todos</option>'+nomes.map(([id,nome])=>'<option value="'+pdfEsc(id||'')+'">'+pdfEsc(nome)+'</option>').join('')+'</select></label>':'';
+ janela.document.body.innerHTML='<h1>CULTIVAR AGRO — Relatório Gerencial</h1><div class="info"><label>De <input id="pdfInicio" type="date" value="'+inicio+'"></label> <label>Até <input id="pdfFim" type="date" value="'+hoje.toISOString().slice(0,10)+'"></label> '+filtroVendedor+' <button id="pdfGerar">Gerar relatório</button></div><div id="pdfConteudo"></div>';
+ const gerar=()=>{
+  const de=janela.document.getElementById('pdfInicio').value,ate=janela.document.getElementById('pdfFim').value,vendedor=janela.document.getElementById('pdfVendedor')?.value||'';
+  if(de&&ate&&de>ate){janela.alert('A data inicial não pode ser posterior à final.');return;}
+  const dados=visitasReais.filter(v=>{const d=String(v.realizada_em||'').slice(0,10);return (!de||d>=de)&&(!ate||d<=ate)&&(!vendedor||v.vendedor_id===vendedor);}).sort((a,b)=>String(b.realizada_em).localeCompare(String(a.realizada_em)));
+  janela.document.getElementById('pdfConteudo').innerHTML='<p>Período: '+pdfEsc(de)+' a '+pdfEsc(ate)+' | Total de visitas: <strong>'+dados.length+'</strong></p><table><tr><th>Data</th><th>Produtor</th><th>Fazenda</th><th>Vendedor</th><th>Assunto</th><th>Fotos</th></tr>'+dados.map(v=>'<tr><td>'+pdfEsc(new Date(v.realizada_em).toLocaleString('pt-BR'))+'</td><td>'+pdfEsc(visitasClientes.find(c=>c.id===v.cliente_id)?.nome||'—')+'</td><td>'+pdfEsc(visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome||'—')+'</td><td>'+pdfEsc(pdfNomeVendedor(v))+'</td><td>'+pdfEsc(v.assunto||'—')+'</td><td>'+visitasFotos.filter(f=>f.visita_id===v.id).length+'</td></tr>').join('')+'</table><div class="actions"><button onclick="window.print()">Imprimir / Salvar como PDF</button></div>';
+ };
+ janela.document.getElementById('pdfGerar').onclick=gerar;gerar();
+}
+
 function abrirRelatorioVisita(id){
  const v=visitasReais.find(x=>x.id===id);
  if(!v){alert('Visita não encontrada.');return;}
