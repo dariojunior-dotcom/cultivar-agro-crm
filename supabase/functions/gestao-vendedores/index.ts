@@ -16,11 +16,26 @@ serve(async(req)=>{
   const {data:manager,error:managerError}=await admin.from("profiles").select("*").eq("id",user.id).single();
   if(managerError||!manager||!["gestor","admin","administrador"].includes(String(manager.role||manager.papel||manager.tipo||"").toLowerCase())||manager.active===false||manager.ativo===false)return reply({error:"Somente gestor ativo"},403);
   const body=await req.json(),acao=String(body.acao||"");
+  const geral=manager.papel==="gestor" && manager.administrador_geral===true;
+  const equipe=(p:any)=>geral || (p.gestor_id===user.id && p.papel==="vendedor");
+  if(acao==="transferir"){
+   if(!geral)return reply({error:"Somente administrador geral pode transferir vendedores"},403);
+   const id=String(body.id||""),gestorId=String(body.gestor_id||"");
+   if(!/^[0-9a-f-]{36}$/i.test(id)||!/^[0-9a-f-]{36}$/i.test(gestorId))return reply({error:"Identificadores inválidos"},400);
+   const [{data:v},{data:g}]=await Promise.all([admin.from("profiles").select("*").eq("id",id).maybeSingle(),admin.from("profiles").select("*").eq("id",gestorId).maybeSingle()]);
+   if(!v||v.papel!=="vendedor"||!g||g.papel!=="gestor"||g.ativo!==true)return reply({error:"Vendedor ou gestor inválido"},400);
+   const {error}=await admin.from("profiles").update({gestor_id:gestorId}).eq("id",id);
+   if(error)return reply({error:error.message},400);
+   return reply({ok:true});
+  }
   if(acao==="convidar"){
    const nome=String(body.nome||"").trim(),email=String(body.email||"").trim().toLowerCase();
    if(nome.length<2||nome.length>120||!/^\S+@\S+\.\S+$/.test(email)||email.length>254)return reply({error:"Nome ou e-mail inválido"},400);
    const {data,error}=await admin.auth.admin.inviteUserByEmail(email,{data:{nome}});
    if(error)return reply({error:error.message},400);
+   if(!data.user?.id)return reply({error:"Convite sem usuário retornado"},500);
+   const {error:profileError}=await admin.from("profiles").upsert({id:data.user.id,nome,papel:"vendedor",ativo:true,gestor_id:user.id},{onConflict:"id"});
+   if(profileError)return reply({error:"Convite criado, mas vínculo de equipe não concluído: "+profileError.message},500);
    // Profile creation depends on the existing auth trigger/schema; do not grant permissions client-side.
    return reply({ok:true,id:data.user?.id,warning:"Confirme que o gatilho de perfis criou o vendedor com papel correto."});
   }
@@ -28,7 +43,7 @@ serve(async(req)=>{
    const id=String(body.id||"");
    if(!/^[0-9a-f-]{36}$/i.test(id)||id===user.id)return reply({error:"Vendedor inválido"},400);
    const {data:profile,error:pErr}=await admin.from("profiles").select("*").eq("id",id).single();
-   if(pErr||!profile||!["vendedor","seller"].includes(String(profile.role||profile.papel||profile.tipo||"").toLowerCase()))return reply({error:"Somente perfis de vendedores podem ser alterados"},400);
+   if(pErr||!profile||!equipe(profile)||!["vendedor","seller"].includes(String(profile.role||profile.papel||profile.tipo||"").toLowerCase()))return reply({error:"Somente perfis de vendedores podem ser alterados"},400);
    const active=acao==="reativar";
    const {error:banError}=await admin.auth.admin.updateUserById(id,{ban_duration:active?"none":"876000h"});
    if(banError)return reply({error:banError.message},400);
