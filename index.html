@@ -50,6 +50,25 @@ async function carregarPainelReal(){
 }
 let filtroPainelMes='',filtroPainelVendedor='';
 function alterarFiltroPainel(tipo,valor){if(tipo==='mes')filtroPainelMes=valor;else filtroPainelVendedor=valor;render()}
+function resumoAgendaPainel(){
+ const registros=painelDados.visitasRegistros||[];
+ const hoje=new Date();hoje.setHours(0,0,0,0);
+ const semana=new Date(hoje);semana.setDate(semana.getDate()+7);
+ const porCliente=new Map();
+ for(const v of registros){
+  if(!v.proxima_visita_em||(!user||user!=='gestor'&&v.vendedor_id!==perfilAtual?.id))continue;
+  if(user==='gestor'&&filtroPainelVendedor&&v.vendedor_id!==filtroPainelVendedor)continue;
+  const chave=v.cliente_id||v.id;
+  if(!porCliente.has(chave)||new Date(v.realizada_em)>new Date(porCliente.get(chave).realizada_em))porCliente.set(chave,v);
+ }
+ const agendadas=[...porCliente.values()].map(v=>({...v,prevista:new Date(v.proxima_visita_em)})).filter(v=>!isNaN(v.prevista)&&v.prevista<new Date(semana.getTime()+86400000));
+ const vencidas=agendadas.filter(v=>v.prevista<hoje).length;
+ const hojeCount=agendadas.filter(v=>v.prevista>=hoje&&v.prevista<new Date(hoje.getTime()+86400000)).length;
+ const proximas=agendadas.length-vencidas-hojeCount;
+ return '<div class="panel"><h3>📅 '+(user==='gestor'?'Resumo da agenda da equipe':'Minha agenda de visitas')+'</h3><div class="grid">'+
+ [['Em atraso',vencidas],['Para hoje',hojeCount],['Próximos 7 dias',proximas]].map((x,i)=>'<div class="card"><div class="muted">'+x[0]+'</div><div class="metric" style="color:'+(i===0?'#a32626':i===1?'#9b6500':'#17623f')+'">'+x[1]+'</div></div>').join('')+
+ '</div><p class="muted">Agenda calculada pela visita mais recente de cada produtor. <button type="button" class="alt" onclick="go(\'visitas\')">Ver próximas visitas</button></p></div>';
+}
 function dashboard(){
  const soma=(arr,campo)=>arr.reduce((a,x)=>a+Number(x[campo]||0),0);
  const porVendedor=arr=>arr.filter(x=>!filtroPainelVendedor||x.vendedor_id===filtroPainelVendedor);
@@ -66,7 +85,7 @@ function dashboard(){
  const filtro='<div class="panel" style="padding:14px"><div class="fields"><div class="field"><label>Competência de vendas e metas</label><input type="month" value="'+esc(filtroPainelMes)+'" onchange="alterarFiltroPainel(\'mes\',this.value)"></div>'+(user==='gestor'?'<div class="field"><label>Vendedor</label><select onchange="alterarFiltroPainel(\'vendedor\',this.value)"><option value="">Toda a equipe</option>'+opts+'</select></div>':'')+'</div><p class="muted" style="margin:8px 0 0">O filtro mensal se aplica a vendas e metas. Pipeline mostra oportunidades abertas de todas as datas; cadastros e visitas mostram o total visível.</p></div>';
  return '<h2>Painel gerencial — Supabase</h2><div class="notice">Indicadores reais do Supabase. Share de mercado depende do cadastro de potenciais da carteira.</div>'+
  (painelDados.carregando?'<p>Carregando dados do Supabase...</p>':painelDados.erro?'<p class="error">Erro ao consultar o Supabase: '+esc(painelDados.erro)+'</p>':
- filtro+'<div class="grid">'+cards.map(x=>'<div class="card"><div class="muted">'+x[0]+'</div><div class="metric">'+x[1]+'</div></div>').join('')+'</div>'+
+ filtro+resumoAgendaPainel()+'<div class="grid">'+cards.map(x=>'<div class="card"><div class="muted">'+x[0]+'</div><div class="metric">'+x[1]+'</div></div>').join('')+'</div>'+
  (user==='gestor'?'<div class="panel"><h3>Equipe comercial</h3><div style="overflow-x:auto"><table><tr><th>Vendedor</th><th>Produtores</th><th>Visitas</th><th>Vendas</th><th>Metas</th></tr>'+painelDados.porVendedor.filter(x=>!filtroPainelVendedor||x.id===filtroPainelVendedor).map(x=>'<tr><td>'+esc(x.nome)+'</td><td>'+x.clientes+'</td><td>'+x.visitas+'</td><td>'+money(soma(vendas.filter(y=>y.vendedor_id===x.id),'valor'))+'</td><td>'+money(soma(metas.filter(y=>y.vendedor_id===x.id),'valor'))+'</td></tr>').join('')+'</table></div></div>':''));
 }
 function field(label,name,type='text',extra=''){return `<div class="field"><label>${label}</label><input name="${name}" type="${type}" ${extra} required></div>`}function formOpen(kind){return `<form onsubmit="add(event,'${kind}')"><div class="fields">`}function formClose(){return `</div><div class="actions"><button type="submit">Salvar registro</button></div></form>`}function clientes(){return `<h2>Produtores e propriedades</h2><div class="panel"><h3>Novo cadastro</h3>${formOpen('clients')}${field('Fazenda','nome')}${field('Produtor','produtor')}${field('Município','municipio')}${field('Cultura','cultura')}${field('Hectares','hectares','number','min="0" step="0.01"')}${field('Potencial anual (R$)','potencial','number','min="0" step="0.01"')}${ownerField()}${formClose()}</div><div class="panel"><h3>Carteira</h3><table><tr><th>Fazenda</th><th>Produtor</th><th>Município</th><th>Cultura</th><th>Área</th><th>Potencial</th><th>Responsável</th><th></th></tr>${clients().map(x=>`<tr><td>${esc(x.nome)}</td><td>${esc(x.produtor)}</td><td>${esc(x.municipio)}</td><td>${esc(x.cultura)}</td><td>${x.hectares} ha</td><td>${money(x.potencial)}</td><td>${names[x.vendedor]}</td><td><button class="danger" onclick="remove('clients',${x.id})">Excluir</button></td></tr>`).join('')}</table></div>`}
@@ -96,7 +115,9 @@ function limparFotosRascunho(form){fotosRascunhoVisita.delete(form);atualizarFot
 function lembretesProximasVisitas(){
  const hoje=new Date();hoje.setHours(0,0,0,0);
  const limite=new Date(hoje);limite.setDate(limite.getDate()+7);
- const lista=visitasReais.filter(v=>v.proxima_visita_em).map(v=>({
+ const ultimas=new Map();
+ for(const v of visitasReais){const chave=v.cliente_id||v.id;if(!ultimas.has(chave)||new Date(v.realizada_em)>new Date(ultimas.get(chave).realizada_em))ultimas.set(chave,v)}
+ const lista=[...ultimas.values()].filter(v=>v.proxima_visita_em).map(v=>({
   ...v,data:new Date(v.proxima_visita_em),
   produtor:visitasClientes.find(c=>c.id===v.cliente_id)?.nome||'Produtor não identificado',
   fazenda:visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome||''
