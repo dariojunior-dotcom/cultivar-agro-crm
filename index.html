@@ -328,10 +328,22 @@ function pdfAbrirImpressao(janela,conteudo){
  janela.focus();
 }
 function pdfLinha(nome,valor){return '<tr><th>'+pdfEsc(nome)+'</th><td style="white-space:pre-wrap;overflow-wrap:anywhere">'+pdfEsc(valor||'—')+'</td></tr>';}
+const pdfVendedoresNomes={};
+async function pdfCarregarNomesVendedores(){
+ const ids=[...new Set(visitasReais.map(v=>v.vendedor_id).filter(Boolean))];
+ if(!ids.length||!sb)return;
+ try{
+  const {data,error}=await sb.from('profiles').select('id,nome').in('id',ids);
+  if(error)console.warn('Nomes dos vendedores indisponíveis:',error);
+  for(const p of data||[])if(p.nome)pdfVendedoresNomes[p.id]=p.nome;
+ }catch(e){console.warn('Falha ao consultar vendedores:',e);}
+ if(perfilAtual?.id&&perfilAtual?.nome)pdfVendedoresNomes[perfilAtual.id]=perfilAtual.nome;
+}
 function pdfNomeVendedor(v){
- const id=v.vendedor_id;const equipe=typeof oportunidadesEquipe!=='undefined'?oportunidadesEquipe:[];
- const lista=Array.isArray(equipe)?equipe:[];
- return lista.find(p=>p.id===id)?.nome||id||'Não informado';
+ const id=v.vendedor_id;
+ if(!id)return 'Não informado';
+ const lista=Array.isArray(oportunidadesEquipe)?oportunidadesEquipe:[];
+ return pdfVendedoresNomes[id]||lista.find(p=>p.id===id)?.nome||(perfilAtual?.id===id?perfilAtual.nome:null)||'Vendedor não identificado';
 }
 function pdfDetalhesVisita(v){
  return '<table>'+pdfLinha('Data',new Date(v.realizada_em).toLocaleString('pt-BR'))+pdfLinha('Cliente / produtor',visitasClientes.find(c=>c.id===v.cliente_id)?.nome)+pdfLinha('Fazenda',visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome)+pdfLinha('Vendedor',pdfNomeVendedor(v))+pdfLinha('Assunto',v.assunto)+pdfLinha('Observações e resultado',v.observacoes)+pdfLinha('Próximo contato',v.proxima_visita_em?String(v.proxima_visita_em).slice(0,10).split('-').reverse().join('/'):'Não agendado')+pdfLinha('Localização GPS',v.latitude!=null&&v.longitude!=null?Number(v.latitude).toFixed(6)+', '+Number(v.longitude).toFixed(6):'GPS não registrado')+(v.latitude!=null&&v.longitude!=null?'<tr><th>Mapa</th><td><a href="https://www.google.com/maps?q='+encodeURIComponent(v.latitude+','+v.longitude)+'" target="_blank" rel="noopener noreferrer">Abrir localização no Google Maps</a></td></tr>':'')+'</table>';
@@ -342,6 +354,7 @@ function pdfArquivoParaDataURL(arquivo){
 async function exportarPDFVisita(id){
  const v=visitasReais.find(x=>x.id===id);if(!v){alert('Visita não encontrada.');return;}
  const janela=pdfJanela();if(!janela)return;
+ await pdfCarregarNomesVendedores();
  const fotos=visitasFotos.filter(f=>f.visita_id===id).slice(0,10);
  let imagens='',falhas=0;
  for(let i=0;i<fotos.length;i++){
@@ -356,7 +369,8 @@ async function exportarPDFVisita(id){
  }
  pdfAbrirImpressao(janela,'<p>Emitido em '+pdfEsc(new Date().toLocaleString('pt-BR'))+'</p>'+pdfDetalhesVisita(v)+'<h2>Fotos ('+fotos.length+')</h2>'+(imagens?'<div class="fotos-grid">'+imagens+'</div>':'<p>Sem fotos disponíveis.</p>')+(falhas?'<p>Atenção: '+falhas+' foto(s) não puderam ser incluídas. Confira antes de salvar.</p>':''));
 }
-function exportarPDFVisitasGerencial(){
+async function exportarPDFVisitasGerencial(){
+ await pdfCarregarNomesVendedores();
  const janela=pdfJanela();if(!janela)return;
  const hoje=new Date(),inicio=new Date(hoje.getFullYear(),hoje.getMonth(),1).toISOString().slice(0,10);
  const nomes=[...new Map(visitasReais.map(v=>[v.vendedor_id,pdfNomeVendedor(v)])).entries()];
