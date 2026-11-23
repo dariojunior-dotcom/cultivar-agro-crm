@@ -284,16 +284,16 @@ function pdfJanela(){
         const cv=document.createElement('canvas');cv.width=logo.naturalWidth;cv.height=logo.naturalHeight;
         cv.getContext('2d').drawImage(logo,0,0);
         const data=cv.toDataURL('image/png');
-        const maxW=49,maxH=21,scale=Math.min(maxW/logo.naturalWidth,maxH/logo.naturalHeight);
+        const maxW=82,maxH=27,scale=Math.min(maxW/logo.naturalWidth,maxH/logo.naturalHeight);
         const w=logo.naturalWidth*scale,h=logo.naturalHeight*scale;
-        pdf.addImage(data,'PNG',margin,14+(21-h)/2,w,h,undefined,'FAST');
+        pdf.addImage(data,'PNG',(pageW-w)/2,12+(27-h)/2,w,h,undefined,'FAST');
        }catch(e){console.warn('Não foi possível inserir a logo no PDF:',e);}
       }
-      pdf.setTextColor(18,75,50);pdf.setFont('helvetica','bold');pdf.setFontSize(12);
-      pdf.text('RELATÓRIO DE VISITA',margin+55,23);
+      pdf.setTextColor(18,75,50);pdf.setFont('helvetica','bold');pdf.setFontSize(13);
+      pdf.text('RELATÓRIO DE VISITA COMERCIAL',pageW/2,46,{align:'center'});
       pdf.setFont('helvetica','normal');pdf.setFontSize(9);
-      pdf.text('Comercial',margin+55,29);
-      pdf.setDrawColor(23,98,63);pdf.setLineWidth(0.6);pdf.line(margin,39,pageW-margin,39);
+      pdf.text('Cultivar Agro — Gestão Comercial',pageW/2,52,{align:'center'});
+      pdf.setDrawColor(23,98,63);pdf.setLineWidth(0.6);pdf.line(margin,58,pageW-margin,58);
       pdf.setTextColor(32,53,43);
      };
      const desenharRodape=()=>{
@@ -307,13 +307,13 @@ function pdfJanela(){
      };
      const novaPagina=()=>{pdf.addPage();desenharMoldura();desenharCabecalho();};
      desenharMoldura();desenharCabecalho();
-     let y=46;
+     let y=65;
      const linhaDado=(nome,valor)=>{
       const label=String(nome||'').trim(),v=String(valor||'—').trim();
       pdf.setFontSize(9.5);
       const linhas=pdf.splitTextToSize(v,usableW-55);
       const altura=Math.max(10,linhas.length*5+5);
-      if(y+altura>274){novaPagina();y=46;}
+      if(y+altura>274){novaPagina();y=65;}
       pdf.setFillColor(244,248,244);pdf.roundedRect(margin,y,usableW,altura-1,2,2,'F');
       pdf.setFont('helvetica','bold');pdf.setTextColor(24,82,53);
       pdf.text(label+':',margin+4,y+6);
@@ -327,7 +327,7 @@ function pdfJanela(){
       if(th&&td)linhaDado(th.textContent,td.textContent);
      }
      y+=3;
-     if(y+12>274){novaPagina();y=46;}
+     if(y+12>274){novaPagina();y=65;}
      pdf.setFont('helvetica','bold');pdf.setFontSize(11);pdf.setTextColor(18,75,50);
      pdf.text('REGISTRO FOTOGRÁFICO',margin,y+5);
      pdf.setDrawColor(207,224,211);pdf.line(margin,y+8,pageW-margin,y+8);
@@ -338,7 +338,7 @@ function pdfJanela(){
       const img=fotos[i];
       if(!img.complete||!img.naturalWidth)continue;
       const col=i%2;
-      if(col===0&&y+cardH>274){novaPagina();y=46;}
+      if(col===0&&y+cardH>274){novaPagina();y=65;}
       const x=margin+col*(cardW+gap),top=y;
       pdf.setDrawColor(205,215,207);pdf.roundedRect(x,top,cardW,cardH,2,2,'S');
       const ratio=Math.min((cardW-6)/img.naturalWidth,photoH/img.naturalHeight);
@@ -372,7 +372,7 @@ function pdfJanela(){
   return janela;
 }
 function pdfAbrirImpressao(janela,conteudo){
- janela.document.body.innerHTML='<div id="voltarCRM" style="position:sticky;top:0;z-index:999;background:white;padding:12px 0"><a href="https://cultivar-agro-crm.vercel.app/#visitas" onclick="return voltarAoCRM(event)" style="display:inline-block;background:#17623f;color:white;text-decoration:none;border-radius:9px;padding:12px 16px;font-size:16px;font-weight:700;cursor:pointer">← Voltar às visitas</a></div><div id="pdfRelatorio"><div class="relatorio-cabecalho" style="display:flex;align-items:center;gap:16px;border-bottom:2px solid #17623f;padding:8px 0 14px;margin-bottom:15px"><img id="logoRelatorio" style="width:155px;height:70px;object-fit:contain" alt="Cultivar Agro"><div><strong style="font-size:19px;color:#17623f">Relatório de Visita Comercial</strong><div style="font-size:12px;color:#567">Cultivar Agro — Gestão Comercial</div></div></div>'+conteudo+'</div><div class="actions"><button onclick="gerarArquivoPDF(false)">Baixar PDF</button> <button onclick="gerarArquivoPDF(true)">Compartilhar PDF / WhatsApp</button> <button onclick="window.print()">Imprimir</button></div>';
+ janela.document.body.innerHTML='<div id="voltarCRM" style="position:sticky;top:0;z-index:999;background:white;padding:12px 0"><a href="https://cultivar-agro-crm.vercel.app/#visitas" onclick="return voltarAoCRM(event)" style="display:inline-block;background:#17623f;color:white;text-decoration:none;border-radius:9px;padding:12px 16px;font-size:16px;font-weight:700;cursor:pointer">← Voltar às visitas</a></div><div id="pdfRelatorio"><div class="relatorio-cabecalho" style="display:flex;flex-direction:column;align-items:center;gap:6px;border-bottom:2px solid #17623f;padding:8px 0 14px;margin-bottom:15px;text-align:center"><img id="logoRelatorio" style="width:min(100%,300px);height:125px;object-fit:contain" alt="Cultivar Agro"><div><strong style="font-size:21px;color:#17623f">Relatório de Visita Comercial</strong><div style="font-size:12px;color:#567;margin-top:4px">Cultivar Agro — Gestão Comercial</div></div></div>'+conteudo+'</div><div class="actions"><button onclick="gerarArquivoPDF(false)">Baixar PDF</button> <button onclick="gerarArquivoPDF(true)">Compartilhar PDF / WhatsApp</button> <button onclick="window.print()">Imprimir</button></div>';
  const logoOrigem=document.querySelector('.crm-logo');const logoDestino=janela.document.getElementById('logoRelatorio');if(logoOrigem&&logoDestino)logoDestino.src=logoOrigem.src;
  janela.focus();
 }
