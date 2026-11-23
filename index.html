@@ -240,6 +240,8 @@ function pdfJanela(){
  if(!janela){alert('Permita pop-ups para gerar o PDF e tente novamente.');return null;}
  janela.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório Cultivar Agro</title><style>body{font:14px Arial,sans-serif;color:#183c2b;max-width:900px;margin:32px auto;padding:0 18px}h1{font-size:22px;border-bottom:3px solid #17623f;padding-bottom:12px}h2{font-size:17px;margin-top:24px}.info{padding:12px;background:#f2f6f2;margin:14px 0}table{border-collapse:collapse;width:100%;font-size:12px}td,th{border:1px solid #c9d6cc;padding:8px;text-align:left;vertical-align:top}th{background:#e9f0e9}.foto{max-width:100%;max-height:360px;object-fit:contain;display:block;margin:12px auto}.page{break-before:page}.actions{margin:20px 0}@media print{.actions{display:none}body{margin:0;max-width:none}.foto{break-inside:avoid}}</style></head><body><h1>CULTIVAR AGRO — Relatório de Visitas</h1><p>Preparando relatório...</p></body></html>');
  janela.document.close();
+  janela.voltarAoCRM=function(){try{window.close();}catch(e){}try{if(window.opener&&!window.opener.closed){window.opener.focus();return;}}catch(e){}window.location.replace('https://cultivar-agro-crm.vercel.app/');};
+  janela.document.body.insertAdjacentHTML('afterbegin','<div id="voltarCRM" style="position:sticky;top:0;z-index:999;background:#fff;padding:12px 0;border-bottom:1px solid #d9e6dc"><button type="button" onclick="voltarAoCRM()" style="background:#17623f;color:white;border:0;border-radius:9px;padding:12px 16px;font-size:16px;font-weight:700">← Voltar ao CRM</button></div>');
   const script=janela.document.createElement('script');script.src='https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';janela.document.head.appendChild(script);
   janela.gerarArquivoPDF=async function(compartilhar){
    const botao=janela.document.activeElement;try{
@@ -261,7 +263,7 @@ function pdfJanela(){
   return janela;
 }
 function pdfAbrirImpressao(janela,conteudo){
- janela.document.body.innerHTML='<div id="pdfRelatorio"><h1>CULTIVAR AGRO — Relatório de Visitas</h1>'+conteudo+'</div><div class="actions"><button onclick="gerarArquivoPDF(false)">Baixar PDF</button> <button onclick="gerarArquivoPDF(true)">Compartilhar PDF / WhatsApp</button> <button onclick="window.print()">Imprimir</button></div>';
+ janela.document.body.innerHTML='<div id="voltarCRM" style="position:sticky;top:0;z-index:999;background:white;padding:12px 0"><button type="button" onclick="voltarAoCRM()" style="background:#17623f;color:white;border:0;border-radius:9px;padding:12px 16px;font-size:16px;font-weight:700">← Voltar ao CRM</button></div><div id="pdfRelatorio"><h1>CULTIVAR AGRO — Relatório de Visitas</h1>'+conteudo+'</div><div class="actions"><button onclick="gerarArquivoPDF(false)">Baixar PDF</button> <button onclick="gerarArquivoPDF(true)">Compartilhar PDF / WhatsApp</button> <button onclick="window.print()">Imprimir</button></div>';
  janela.focus();
 }
 function pdfLinha(nome,valor){return '<tr><th>'+pdfEsc(nome)+'</th><td style="white-space:pre-wrap;overflow-wrap:anywhere">'+pdfEsc(valor||'—')+'</td></tr>';}
@@ -298,7 +300,7 @@ function exportarPDFVisitasGerencial(){
  const hoje=new Date(),inicio=new Date(hoje.getFullYear(),hoje.getMonth(),1).toISOString().slice(0,10);
  const nomes=[...new Map(visitasReais.map(v=>[v.vendedor_id,pdfNomeVendedor(v)])).entries()];
  const filtroVendedor=user==='gestor'?'<label>Vendedor <select id="pdfVendedor"><option value="">Todos</option>'+nomes.map(([id,nome])=>'<option value="'+pdfEsc(id||'')+'">'+pdfEsc(nome)+'</option>').join('')+'</select></label>':'';
- janela.document.body.innerHTML='<h1>CULTIVAR AGRO — Relatório Gerencial</h1><div class="info"><label>De <input id="pdfInicio" type="date" value="'+inicio+'"></label> <label>Até <input id="pdfFim" type="date" value="'+hoje.toISOString().slice(0,10)+'"></label> '+filtroVendedor+' <button id="pdfGerar">Gerar relatório</button></div><div id="pdfConteudo"></div>';
+ janela.document.body.innerHTML='<div id="voltarCRM" style="position:sticky;top:0;z-index:999;background:white;padding:12px 0"><button type="button" onclick="voltarAoCRM()" style="background:#17623f;color:white;border:0;border-radius:9px;padding:12px 16px;font-size:16px;font-weight:700">← Voltar ao CRM</button></div><h1>CULTIVAR AGRO — Relatório Gerencial</h1><div class="info"><label>De <input id="pdfInicio" type="date" value="'+inicio+'"></label> <label>Até <input id="pdfFim" type="date" value="'+hoje.toISOString().slice(0,10)+'"></label> '+filtroVendedor+' <button id="pdfGerar">Gerar relatório</button></div><div id="pdfConteudo"></div>';
  const gerar=()=>{
   const de=janela.document.getElementById('pdfInicio').value,ate=janela.document.getElementById('pdfFim').value,vendedor=janela.document.getElementById('pdfVendedor')?.value||'';
   if(de&&ate&&de>ate){janela.alert('A data inicial não pode ser posterior à final.');return;}
