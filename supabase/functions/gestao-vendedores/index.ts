@@ -21,14 +21,17 @@ serve(async(req)=>{
    if(nome.length<2||nome.length>120||!/^\S+@\S+\.\S+$/.test(email)||email.length>254)return reply({error:"Nome ou e-mail inválido"},400);
    const {data,error}=await admin.auth.admin.inviteUserByEmail(email,{data:{nome}});
    if(error)return reply({error:error.message},400);
-   // Profile creation depends on the existing auth trigger/schema; do not grant permissions client-side.
-   return reply({ok:true,id:data.user?.id,warning:"Confirme que o gatilho de perfis criou o vendedor com papel correto."});
+   if(!data.user?.id)return reply({error:"Convite criado sem identificador de usuário. Verifique no Auth antes de tentar novamente."},500);
+   const {error:profileError}=await admin.from("profiles").upsert({id:data.user.id,nome,papel:"vendedor",ativo:true,gestor_id:user.id,administrador_geral:false},{onConflict:"id"});
+   if(profileError)return reply({error:"Convite enviado, mas o vínculo do vendedor falhou: "+profileError.message+". Não envie novo convite antes de corrigir o perfil."},500);
+   return reply({ok:true,id:data.user.id});
   }
   if(acao==="desativar"||acao==="reativar"){
    const id=String(body.id||"");
    if(!/^[0-9a-f-]{36}$/i.test(id)||id===user.id)return reply({error:"Vendedor inválido"},400);
    const {data:profile,error:pErr}=await admin.from("profiles").select("*").eq("id",id).single();
    if(pErr||!profile||!["vendedor","seller"].includes(String(profile.role||profile.papel||profile.tipo||"").toLowerCase()))return reply({error:"Somente perfis de vendedores podem ser alterados"},400);
+   if(manager.administrador_geral!==true && profile.gestor_id!==user.id)return reply({error:"Este vendedor não pertence à sua equipe"},403);
    const active=acao==="reativar";
    const {error:banError}=await admin.auth.admin.updateUserById(id,{ban_duration:active?"none":"876000h"});
    if(banError)return reply({error:banError.message},400);
