@@ -282,20 +282,24 @@ function pdfJanela(){
       if(th&&td)line(th.textContent.trim()+': '+td.textContent.trim());
      }
      const fotos=Array.from(elemento.querySelectorAll('.foto-pdf img'));
+     const cardW=86,cardH=83,gap=8,photoH=65;
      for(let i=0;i<fotos.length;i++){
       const img=fotos[i];
       if(!img.complete||!img.naturalWidth)continue;
-      pdf.addPage();
-      pdf.setFont('helvetica','bold');pdf.setFontSize(11);
-      pdf.text('Foto '+(i+1)+' de '+fotos.length,margin,18);
-      const maxW=180,maxH=250;
-      const ratio=Math.min(maxW/img.naturalWidth,maxH/img.naturalHeight);
+      const col=i%2;
+      if(col===0&&y+cardH>pageH-16){pdf.addPage();y=20;}
+      const x=margin+col*(cardW+gap),top=y;
+      pdf.setDrawColor(205,215,207);pdf.roundedRect(x,top,cardW,cardH,2,2,'S');
+      const ratio=Math.min((cardW-6)/img.naturalWidth,photoH/img.naturalHeight);
       const w=img.naturalWidth*ratio,h=img.naturalHeight*ratio;
-      const x=(pageW-w)/2,top=24+(maxH-h)/2;
+      const px=x+(cardW-w)/2,py=top+3+(photoH-h)/2;
       const fmt=/^data:image\/png/i.test(img.src)?'PNG':'JPEG';
-      pdf.addImage(img.src,fmt,x,top,w,h,undefined,'FAST');
-      const legenda=img.closest('figure')?.querySelector('figcaption')?.textContent||'';
-      if(legenda){pdf.setFont('helvetica','normal');pdf.setFontSize(9);pdf.text(pdf.splitTextToSize(legenda,usableW),margin,282);}
+      pdf.addImage(img.src,fmt,px,py,w,h,undefined,'FAST');
+      const legenda=img.closest('figure')?.querySelector('figcaption')?.textContent||('Foto '+(i+1));
+      pdf.setFont('helvetica','normal');pdf.setFontSize(8);
+      const caption=pdf.splitTextToSize(legenda,cardW-8).slice(0,2);
+      pdf.text(caption,x+4,top+photoH+7);
+      if(col===1||i===fotos.length-1)y+=cardH+gap;
      }
      blob=pdf.output('blob');
     }else{
