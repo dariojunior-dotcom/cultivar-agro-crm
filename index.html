@@ -31,7 +31,7 @@ async function carregarPainelReal(){
   const [c,f,v,p,vd,m,o]=await Promise.all([
    sb.from('clientes').select('id,vendedor_id,nome'),
    sb.from('fazendas').select('id,vendedor_id'),
-   sb.from('visitas').select('id,vendedor_id'),
+   sb.from('visitas').select('id,vendedor_id,cliente_id,realizada_em,proxima_visita_em'),
    user==='gestor'?sb.from('profiles').select('*'):Promise.resolve({data:[],error:null}),
    sb.from('vendas').select('id,vendedor_id,valor,data_venda'),
    sb.from('metas').select('id,vendedor_id,valor,competencia'),
