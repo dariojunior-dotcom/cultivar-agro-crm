@@ -641,19 +641,20 @@ function fazendasSupabase(){
  '<div class="panel"><h3>Nova fazenda</h3><form onsubmit="salvarFazendaSupabase(event)"><div class="fields">'+
  '<div class="field"><label>Produtor</label><select name="cliente_id" required><option value="">Selecione um produtor</option>'+op+'</select></div>'+
  field('Nome da fazenda','nome')+
+ '<div class="field"><label>Gerente da fazenda</label><input name="gerente" maxlength="150" placeholder="Nome do gerente"></div>'+
  '<div class="field"><label>Município</label><input name="municipio"></div>'+
  '<div class="field"><label>Área total (ha)</label><input name="area_total_ha" type="number" min="0" step="0.01"></div>'+
  '<div class="field"><label>Latitude</label><input name="latitude" type="number" min="-90" max="90" step="any"></div>'+
  '<div class="field"><label>Longitude</label><input name="longitude" type="number" min="-180" max="180" step="any"></div>'+
  '</div><div class="actions"><button type="submit" '+(fazendasCarregando||!fazendasClientes.length?'disabled':'')+'>Salvar no Supabase</button></div></form></div>'+
  '<div class="panel"><h3>Fazendas cadastradas</h3>'+(fazendasCarregando?'<p>Carregando...</p>':fazendasErro?'<p class="error">'+esc(fazendasErro)+'</p>':
- '<p>'+fazendasReais.length+' fazenda(s) encontrada(s).</p><table><tr><th>Fazenda</th><th>Produtor</th><th>Município</th><th>Área (ha)</th></tr>'+
- fazendasReais.map(f=>'<tr><td>'+esc(f.nome)+'</td><td>'+esc(fazendasClientes.find(c=>c.id===f.cliente_id)?.nome||'Indisponível')+'</td><td>'+esc(f.municipio||'')+'</td><td>'+esc(f.area_total_ha??'')+'</td></tr>').join('')+'</table>')+'</div>';
+ '<p>'+fazendasReais.length+' fazenda(s) encontrada(s).</p><table><tr><th>Fazenda</th><th>Produtor</th><th>Gerente</th><th>Município</th><th>Área (ha)</th></tr>'+
+ fazendasReais.map(f=>'<tr><td>'+esc(f.nome)+'</td><td>'+esc(fazendasClientes.find(c=>c.id===f.cliente_id)?.nome||'Indisponível')+'</td><td>'+esc(f.gerente||'—')+'</td><td>'+esc(f.municipio||'')+'</td><td>'+esc(f.area_total_ha??'')+'</td></tr>').join('')+'</table>')+'</div>';
 }
 async function loadFazendasSupabase(){
  if(!sb||!perfilAtual)return;
  fazendasCarregando=true;fazendasErro='';if(tab==='fazendas')render();
- const [c,f]=await Promise.all([sb.from('clientes').select('id,nome,municipio,vendedor_id').order('nome'),sb.from('fazendas').select('id,cliente_id,vendedor_id,nome,municipio,area_total_ha,latitude,longitude,criado_em').order('criado_em',{ascending:false})]);
+ const [c,f]=await Promise.all([sb.from('clientes').select('id,nome,municipio,vendedor_id').order('nome'),sb.from('fazendas').select('id,cliente_id,vendedor_id,nome,gerente,municipio,area_total_ha,latitude,longitude,criado_em').order('criado_em',{ascending:false})]);
  fazendasCarregando=false;fazendasClientes=c.error?[]:c.data||[];fazendasReais=f.error?[]:f.data||[];
  if(c.error||f.error)fazendasErro='Erro ao carregar: '+(c.error?.message||f.error?.message);
  if(tab==='fazendas')render();
@@ -665,7 +666,7 @@ async function salvarFazendaSupabase(event){
  if(!c)throw Error('Selecione um produtor válido.');
  if(user!=='gestor'&&c.vendedor_id!==perfilAtual.id)throw Error('Produtor fora da sua carteira.');
  const nome=String(d.get('nome')||'').trim();if(!nome)throw Error('Informe o nome da fazenda.');
- const p={cliente_id:c.id,vendedor_id:c.vendedor_id,nome,municipio:String(d.get('municipio')||'').trim()||null};
+ const p={cliente_id:c.id,vendedor_id:c.vendedor_id,nome,gerente:String(d.get('gerente')||'').trim()||null,municipio:String(d.get('municipio')||'').trim()||null};
  for(const k of ['area_total_ha','latitude','longitude']){const v=String(d.get(k)||'').trim();if(v){const n=Number(v);if(!Number.isFinite(n)||(k==='area_total_ha'&&n<0)||(k==='latitude'&&Math.abs(n)>90)||(k==='longitude'&&Math.abs(n)>180))throw Error('Número inválido: '+k);p[k]=n;}}
  const {error}=await sb.from('fazendas').insert(p);if(error)throw error;
  await loadFazendasSupabase();alert('Fazenda salva no Supabase.');
