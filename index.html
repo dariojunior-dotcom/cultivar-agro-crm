@@ -272,29 +272,66 @@ function pdfJanela(){
      // Avoid html2pdf CSS page-break behavior, which can add a blank page and crop tall images.
      const pdf=new janela.jspdf.jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
      const margin=15,pageW=210,pageH=297,usableW=pageW-2*margin;
-     const desenharMoldura=()=>{pdf.setDrawColor(23,98,63);pdf.setLineWidth(0.65);pdf.roundedRect(7,7,pageW-14,pageH-14,5,5,'S');};
-     desenharMoldura();
-     const adicionarPagina=()=>{pdf.addPage();desenharMoldura();};
-     let y=20;
-     const line=(value,bold=false)=>{
-      pdf.setFont('helvetica',bold?'bold':'normal');pdf.setFontSize(bold?12:10);
-      const rows=pdf.splitTextToSize(String(value||'—'),usableW);
-      for(const row of rows){if(y>pageH-18){adicionarPagina();y=20;}pdf.text(row,margin,y);y+=bold?7:5.5;}
-      y+=2;
+     const desenharMoldura=()=>{
+      pdf.setDrawColor(23,98,63);pdf.setLineWidth(0.65);
+      pdf.roundedRect(7,7,pageW-14,pageH-14,5,5,'S');
      };
-     line('CULTIVAR AGRO — RELATÓRIO DE VISITA',true);
+     const desenharCabecalho=()=>{
+      // Marca gráfica Cultivar: símbolo de folha sobre o verde institucional.
+      pdf.setFillColor(18,75,50);pdf.roundedRect(margin,15,18,18,3,3,'F');
+      pdf.setFillColor(214,232,140);pdf.ellipse(margin+10,22,5,2.7,'F');
+      pdf.setDrawColor(255,255,255);pdf.setLineWidth(0.65);
+      pdf.line(margin+5,29,margin+14,20);
+      pdf.setTextColor(18,75,50);pdf.setFont('helvetica','bold');pdf.setFontSize(15);
+      pdf.text('CULTIVAR AGRO',margin+23,22);
+      pdf.setFont('helvetica','normal');pdf.setFontSize(10);
+      pdf.text('Relatório de Visita Comercial',margin+23,29);
+      pdf.setDrawColor(23,98,63);pdf.setLineWidth(0.6);pdf.line(margin,37,pageW-margin,37);
+      pdf.setTextColor(32,53,43);
+     };
+     const desenharRodape=()=>{
+      const numero=pdf.internal.getCurrentPageInfo().pageNumber;
+      pdf.setDrawColor(207,224,211);pdf.setLineWidth(0.35);
+      pdf.line(margin,279,pageW-margin,279);
+      pdf.setFont('helvetica','normal');pdf.setFontSize(8);pdf.setTextColor(70,95,78);
+      pdf.text('Cultivar Agro — Gestão Comercial',margin,285);
+      pdf.text('Página '+numero,pageW-margin,285,{align:'right'});
+      pdf.setTextColor(32,53,43);
+     };
+     const novaPagina=()=>{pdf.addPage();desenharMoldura();desenharCabecalho();};
+     desenharMoldura();desenharCabecalho();
+     let y=46;
+     const linhaDado=(nome,valor)=>{
+      const label=String(nome||'').trim(),v=String(valor||'—').trim();
+      pdf.setFontSize(9.5);
+      const linhas=pdf.splitTextToSize(v,usableW-55);
+      const altura=Math.max(10,linhas.length*5+5);
+      if(y+altura>274){novaPagina();y=46;}
+      pdf.setFillColor(244,248,244);pdf.roundedRect(margin,y,usableW,altura-1,2,2,'F');
+      pdf.setFont('helvetica','bold');pdf.setTextColor(24,82,53);
+      pdf.text(label+':',margin+4,y+6);
+      pdf.setFont('helvetica','normal');pdf.setTextColor(32,53,43);
+      pdf.text(linhas,margin+55,y+6);
+      y+=altura+2;
+     };
      const tabela=elemento.querySelector('table');
      if(tabela)for(const tr of tabela.querySelectorAll('tr')){
       const th=tr.querySelector('th'),td=tr.querySelector('td');
-      if(th&&td)line(th.textContent.trim()+': '+td.textContent.trim());
+      if(th&&td)linhaDado(th.textContent,td.textContent);
      }
+     y+=3;
+     if(y+12>274){novaPagina();y=46;}
+     pdf.setFont('helvetica','bold');pdf.setFontSize(11);pdf.setTextColor(18,75,50);
+     pdf.text('REGISTRO FOTOGRÁFICO',margin,y+5);
+     pdf.setDrawColor(207,224,211);pdf.line(margin,y+8,pageW-margin,y+8);
+     pdf.setTextColor(32,53,43);y+=15;
      const fotos=Array.from(elemento.querySelectorAll('.foto-pdf img'));
      const cardW=86,cardH=83,gap=8,photoH=65;
      for(let i=0;i<fotos.length;i++){
       const img=fotos[i];
       if(!img.complete||!img.naturalWidth)continue;
       const col=i%2;
-      if(col===0&&y+cardH>pageH-16){adicionarPagina();y=20;}
+      if(col===0&&y+cardH>274){novaPagina();y=46;}
       const x=margin+col*(cardW+gap),top=y;
       pdf.setDrawColor(205,215,207);pdf.roundedRect(x,top,cardW,cardH,2,2,'S');
       const ratio=Math.min((cardW-6)/img.naturalWidth,photoH/img.naturalHeight);
@@ -308,6 +345,7 @@ function pdfJanela(){
       pdf.text(caption,x+4,top+photoH+7);
       if(col===1||i===fotos.length-1)y+=cardH+gap;
      }
+     for(let p=1;p<=pdf.internal.getNumberOfPages();p++){pdf.setPage(p);desenharRodape();}
      blob=pdf.output('blob');
     }else{
      blob=await janela.html2pdf().set(config).from(elemento).outputPdf('blob');
