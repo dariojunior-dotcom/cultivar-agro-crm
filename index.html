@@ -277,16 +277,23 @@ function pdfJanela(){
       pdf.roundedRect(7,7,pageW-14,pageH-14,5,5,'S');
      };
      const desenharCabecalho=()=>{
-      // Marca gráfica Cultivar: símbolo de folha sobre o verde institucional.
-      pdf.setFillColor(18,75,50);pdf.roundedRect(margin,15,18,18,3,3,'F');
-      pdf.setFillColor(214,232,140);pdf.ellipse(margin+10,22,5,2.7,'F');
-      pdf.setDrawColor(255,255,255);pdf.setLineWidth(0.65);
-      pdf.line(margin+5,29,margin+14,20);
-      pdf.setTextColor(18,75,50);pdf.setFont('helvetica','bold');pdf.setFontSize(15);
-      pdf.text('CULTIVAR AGRO',margin+23,22);
-      pdf.setFont('helvetica','normal');pdf.setFontSize(10);
-      pdf.text('Relatório de Visita Comercial',margin+23,29);
-      pdf.setDrawColor(23,98,63);pdf.setLineWidth(0.6);pdf.line(margin,37,pageW-margin,37);
+      // Use the actual brand artwork already displayed in the CRM, never a hand-drawn approximation.
+      const logo=window.parent?.document?.querySelector('.crm-logo')||document.querySelector('.crm-logo');
+      if(logo?.complete&&logo.naturalWidth){
+       try{
+        const cv=document.createElement('canvas');cv.width=logo.naturalWidth;cv.height=logo.naturalHeight;
+        cv.getContext('2d').drawImage(logo,0,0);
+        const data=cv.toDataURL('image/png');
+        const maxW=49,maxH=21,scale=Math.min(maxW/logo.naturalWidth,maxH/logo.naturalHeight);
+        const w=logo.naturalWidth*scale,h=logo.naturalHeight*scale;
+        pdf.addImage(data,'PNG',margin,14+(21-h)/2,w,h,undefined,'FAST');
+       }catch(e){console.warn('Não foi possível inserir a logo no PDF:',e);}
+      }
+      pdf.setTextColor(18,75,50);pdf.setFont('helvetica','bold');pdf.setFontSize(12);
+      pdf.text('RELATÓRIO DE VISITA',margin+55,23);
+      pdf.setFont('helvetica','normal');pdf.setFontSize(9);
+      pdf.text('Comercial',margin+55,29);
+      pdf.setDrawColor(23,98,63);pdf.setLineWidth(0.6);pdf.line(margin,39,pageW-margin,39);
       pdf.setTextColor(32,53,43);
      };
      const desenharRodape=()=>{
