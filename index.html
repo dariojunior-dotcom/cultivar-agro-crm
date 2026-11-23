@@ -93,6 +93,19 @@ function atualizarFotosRascunho(form){
 }
 function limparFotosRascunho(form){fotosRascunhoVisita.delete(form);atualizarFotosRascunho(form);}
 
+function lembretesProximasVisitas(){
+ const hoje=new Date();hoje.setHours(0,0,0,0);
+ const limite=new Date(hoje);limite.setDate(limite.getDate()+7);
+ const lista=visitasReais.filter(v=>v.proxima_visita_em).map(v=>({
+  ...v,data:new Date(v.proxima_visita_em),
+  produtor:visitasClientes.find(c=>c.id===v.cliente_id)?.nome||'Produtor não identificado',
+  fazenda:visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome||''
+ })).filter(v=>!isNaN(v.data)&&v.data<new Date(limite.getTime()+86400000)).sort((a,b)=>a.data-b.data);
+ if(!lista.length)return '<div class="panel"><h3>📅 Próximas visitas</h3><p class="muted">Nenhuma visita agendada para os próximos 7 dias ou em atraso.</p></div>';
+ return '<div class="panel"><h3>📅 Lembretes de próximas visitas</h3><p>Visitas vencidas, de hoje e dos próximos 7 dias.</p><table><tr><th>Prazo</th><th>Produtor</th><th>Fazenda</th><th>Data prevista</th></tr>'+
+ lista.map(v=>{const dia=new Date(v.data);dia.setHours(0,0,0,0);const atraso=dia<hoje,agora=dia.getTime()===hoje.getTime();
+ return '<tr><td><strong style="color:'+(atraso?'#a32626':agora?'#9b6500':'#17623f')+'">'+(atraso?'Vencida':agora?'Hoje':'Próxima')+'</strong></td><td>'+esc(v.produtor)+'</td><td>'+esc(v.fazenda||'—')+'</td><td>'+esc(v.data.toLocaleDateString('pt-BR'))+'</td></tr>';}).join('')+'</table></div>';
+}
 function visitasPage(){
  const co=visitasClientes.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.nome)+'</option>').join('');
  const fo=visitasFazendas.map(f=>'<option value="'+esc(f.id)+'" data-cliente="'+esc(f.cliente_id)+'">'+esc(f.nome)+'</option>').join('');
@@ -103,10 +116,11 @@ function visitasPage(){
  '<div class="field"><label>Data da visita</label><input type="datetime-local" name="realizada_em" required></div>'+
  '<div class="field"><label>Assunto</label><input name="assunto"></div>'+
  '<div class="field wide"><label>Observações e resultado</label><textarea name="observacoes"></textarea></div>'+
- '<div class="field"><label>Próximo contato (opcional)</label><input type="date" name="proxima_visita_em"></div>'+
+ '<div class="field"><label>Próxima visita / lembrete (opcional)</label><input type="date" name="proxima_visita_em"></div>'+
  '<div class="field wide"><label>Fotos (até 10, máximo de 10 MB cada)</label><input type="file" name="fotos" accept="image/*" multiple onchange="adicionarFotosRascunho(this)"><p data-fotos-rascunho>0 foto(s) selecionada(s) para esta visita.</p><button type="button" class="alt" data-remover-fotos hidden onclick="limparFotosRascunho(this.form)">Limpar fotos</button></div>'+
  '<div class="field wide"><label>GPS (somente com permissão)</label><div class="geo"><button type="button" onclick="captureGPS(this)">📍 Capturar localização</button><span id="gpsStatus" class="muted">Nenhuma localização registrada</span></div><input type="hidden" name="lat"><input type="hidden" name="lng"></div>'+
  '</div><div class="actions"><button type="submit" '+(visitasCarregando||!visitasClientes.length?'disabled':'')+'>Salvar visita no Supabase</button></div></form></div>'+
+ lembretesProximasVisitas()+
  '<div class="panel"><h3>Histórico real</h3>'+(visitasCarregando?'<p>Carregando...</p>':visitasErro?'<p class="error">'+esc(visitasErro)+'</p>':
  '<p>'+visitasReais.length+' visita(s) encontrada(s).</p><div class="actions"><button type="button" onclick="exportarPDFVisitasGerencial()">Exportar relatório gerencial em PDF</button></div><table><tr><th>Data</th><th>Produtor</th><th>Fazenda</th><th>Assunto</th><th>Localização</th><th>Fotos</th></tr>'+
  visitasReais.map(v=>'<tr><td>'+esc(new Date(v.realizada_em).toLocaleString('pt-BR'))+'</td><td>'+esc(visitasClientes.find(c=>c.id===v.cliente_id)?.nome||'—')+'</td><td>'+esc(visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome||'—')+'</td><td>'+esc(v.assunto||'')+'</td><td>'+((v.latitude!=null&&v.longitude!=null)?'<a href="https://www.google.com/maps?q='+encodeURIComponent(v.latitude+','+v.longitude)+'" target="_blank" rel="noopener noreferrer">📍 Ver no mapa</a>':'<span class="muted">GPS não registrado</span>')+'</td><td><button type="button" onclick="abrirRelatorioVisita(\''+esc(v.id)+'\')">Ver relatório</button> <button type="button" class="alt" onclick="exportarPDFVisita(\''+esc(v.id)+'\')">Exportar PDF</button> <button type="button" onclick="abrirFotosVisita(\''+esc(v.id)+'\')">Ver fotos ('+visitasFotos.filter(p=>p.visita_id===v.id).length+')</button> <button type="button" class="alt" onclick="anexarFotoVisita(\''+esc(v.id)+'\')">Anexar foto</button></td></tr>').join('')+'</table>')+'</div>';
