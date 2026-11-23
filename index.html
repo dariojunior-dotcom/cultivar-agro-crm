@@ -239,10 +239,29 @@ function pdfJanela(){
  const janela=window.open('','_blank');
  if(!janela){alert('Permita pop-ups para gerar o PDF e tente novamente.');return null;}
  janela.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório Cultivar Agro</title><style>body{font:14px Arial,sans-serif;color:#183c2b;max-width:900px;margin:32px auto;padding:0 18px}h1{font-size:22px;border-bottom:3px solid #17623f;padding-bottom:12px}h2{font-size:17px;margin-top:24px}.info{padding:12px;background:#f2f6f2;margin:14px 0}table{border-collapse:collapse;width:100%;font-size:12px}td,th{border:1px solid #c9d6cc;padding:8px;text-align:left;vertical-align:top}th{background:#e9f0e9}.foto{max-width:100%;max-height:360px;object-fit:contain;display:block;margin:12px auto}.page{break-before:page}.actions{margin:20px 0}@media print{.actions{display:none}body{margin:0;max-width:none}.foto{break-inside:avoid}}</style></head><body><h1>CULTIVAR AGRO — Relatório de Visitas</h1><p>Preparando relatório...</p></body></html>');
- janela.document.close();return janela;
+ janela.document.close();
+  const script=janela.document.createElement('script');script.src='https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';janela.document.head.appendChild(script);
+  janela.gerarArquivoPDF=async function(compartilhar){
+   const botao=janela.document.activeElement;try{
+    if(typeof janela.html2pdf!=='function')throw Error('Gerador de PDF ainda está carregando. Aguarde alguns segundos e tente novamente.');
+    if(botao&&botao.tagName==='BUTTON')botao.disabled=true;
+    const elemento=janela.document.getElementById('pdfConteudo')||janela.document.getElementById('pdfRelatorio');
+    if(!elemento)throw Error('Relatório indisponível.');
+    const nome='Cultivar_Agro_Relatorio_'+new Date().toISOString().slice(0,10)+'.pdf';
+    const config={margin:10,filename:nome,image:{type:'jpeg',quality:0.92},html2canvas:{scale:1.5,useCORS:true},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy']}};
+    const blob=await janela.html2pdf().set(config).from(elemento).outputPdf('blob');
+    const arquivo=new File([blob],nome,{type:'application/pdf'});
+    if(compartilhar&&navigator.share&&navigator.canShare&&navigator.canShare({files:[arquivo]})){
+     try{await navigator.share({files:[arquivo],title:'Relatório Cultivar Agro'});return;}catch(e){if(e.name==='AbortError')return;}
+    }
+    const url=URL.createObjectURL(blob);const link=janela.document.createElement('a');link.href=url;link.download=nome;janela.document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+    if(compartilhar)janela.alert('PDF baixado. Abra o arquivo e compartilhe pelo WhatsApp.');
+   }catch(e){janela.alert('Não foi possível gerar o PDF: '+(e.message||e));}finally{if(botao&&botao.tagName==='BUTTON')botao.disabled=false;}
+  };
+  return janela;
 }
 function pdfAbrirImpressao(janela,conteudo){
- janela.document.body.innerHTML='<h1>CULTIVAR AGRO — Relatório de Visitas</h1>'+conteudo+'<div class="actions"><button onclick="window.print()">Imprimir / Salvar como PDF</button></div>';
+ janela.document.body.innerHTML='<div id="pdfRelatorio"><h1>CULTIVAR AGRO — Relatório de Visitas</h1>'+conteudo+'</div><div class="actions"><button onclick="gerarArquivoPDF(false)">Baixar PDF</button> <button onclick="gerarArquivoPDF(true)">Compartilhar PDF / WhatsApp</button> <button onclick="window.print()">Imprimir</button></div>';
  janela.focus();
 }
 function pdfLinha(nome,valor){return '<tr><th>'+pdfEsc(nome)+'</th><td style="white-space:pre-wrap;overflow-wrap:anywhere">'+pdfEsc(valor||'—')+'</td></tr>';}
@@ -284,7 +303,7 @@ function exportarPDFVisitasGerencial(){
   const de=janela.document.getElementById('pdfInicio').value,ate=janela.document.getElementById('pdfFim').value,vendedor=janela.document.getElementById('pdfVendedor')?.value||'';
   if(de&&ate&&de>ate){janela.alert('A data inicial não pode ser posterior à final.');return;}
   const dados=visitasReais.filter(v=>{const d=String(v.realizada_em||'').slice(0,10);return (!de||d>=de)&&(!ate||d<=ate)&&(!vendedor||v.vendedor_id===vendedor);}).sort((a,b)=>String(b.realizada_em).localeCompare(String(a.realizada_em)));
-  janela.document.getElementById('pdfConteudo').innerHTML='<p>Período: '+pdfEsc(de)+' a '+pdfEsc(ate)+' | Total de visitas: <strong>'+dados.length+'</strong></p><table><tr><th>Data</th><th>Produtor</th><th>Fazenda</th><th>Vendedor</th><th>Assunto</th><th>Fotos</th></tr>'+dados.map(v=>'<tr><td>'+pdfEsc(new Date(v.realizada_em).toLocaleString('pt-BR'))+'</td><td>'+pdfEsc(visitasClientes.find(c=>c.id===v.cliente_id)?.nome||'—')+'</td><td>'+pdfEsc(visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome||'—')+'</td><td>'+pdfEsc(pdfNomeVendedor(v))+'</td><td>'+pdfEsc(v.assunto||'—')+'</td><td>'+visitasFotos.filter(f=>f.visita_id===v.id).length+'</td></tr>').join('')+'</table><div class="actions"><button onclick="window.print()">Imprimir / Salvar como PDF</button></div>';
+  janela.document.getElementById('pdfConteudo').innerHTML='<p>Período: '+pdfEsc(de)+' a '+pdfEsc(ate)+' | Total de visitas: <strong>'+dados.length+'</strong></p><table><tr><th>Data</th><th>Produtor</th><th>Fazenda</th><th>Vendedor</th><th>Assunto</th><th>Fotos</th></tr>'+dados.map(v=>'<tr><td>'+pdfEsc(new Date(v.realizada_em).toLocaleString('pt-BR'))+'</td><td>'+pdfEsc(visitasClientes.find(c=>c.id===v.cliente_id)?.nome||'—')+'</td><td>'+pdfEsc(visitasFazendas.find(f=>f.id===v.fazenda_id)?.nome||'—')+'</td><td>'+pdfEsc(pdfNomeVendedor(v))+'</td><td>'+pdfEsc(v.assunto||'—')+'</td><td>'+visitasFotos.filter(f=>f.visita_id===v.id).length+'</td></tr>').join('')+'</table><div class="actions"><button onclick="gerarArquivoPDF(false)">Baixar PDF</button> <button onclick="gerarArquivoPDF(true)">Compartilhar PDF / WhatsApp</button> <button onclick="window.print()">Imprimir</button></div>';
  };
  janela.document.getElementById('pdfGerar').onclick=gerar;gerar();
 }
