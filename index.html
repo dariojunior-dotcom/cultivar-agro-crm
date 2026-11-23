@@ -636,7 +636,7 @@ async function salvarClienteSupabase(event){
 
 let fazendasReais=[],fazendasClientes=[],fazendasErro='',fazendasCarregando=false;
 function fazendasSupabase(){
- const op=fazendasClientes.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.nome)+' — '+esc(c.municipio||'')+'</option>').join('');
+ const op=fazendasClientes.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.nome)+'</option>').join('');
  return '<h2>Fazendas — Supabase</h2><div class="notice"><b>Homologação:</b> Produtores e Fazendas consultam e salvam no Supabase. Outros módulos seguem demonstrativos. Use apenas dados fictícios até validar permissões.</div>'+
  '<div class="panel"><h3>Nova fazenda</h3><form onsubmit="salvarFazendaSupabase(event)"><div class="fields">'+
  '<div class="field"><label>Produtor</label><select name="cliente_id" required><option value="">Selecione um produtor</option>'+op+'</select></div>'+
