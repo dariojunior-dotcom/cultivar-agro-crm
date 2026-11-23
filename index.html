@@ -242,6 +242,7 @@ function pdfJanela(){
  overlay.style.cssText='position:fixed;inset:0;z-index:100000;background:#fff;overflow:hidden';
  const iframe=document.createElement('iframe');
  iframe.title='Relatório Cultivar Agro';
+ iframe.setAttribute('allow','web-share');
  iframe.style.cssText='display:block;width:100%;height:100%;border:0;background:#fff';
  overlay.appendChild(iframe);
  document.body.appendChild(overlay);
@@ -262,8 +263,12 @@ function pdfJanela(){
     const config={margin:10,filename:nome,image:{type:'jpeg',quality:0.92},html2canvas:{scale:1.5,useCORS:true},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy'],before:'.foto-pdf',avoid:['.foto-pdf','.foto-pdf img','.foto-pdf figcaption']}};
     await Promise.all(Array.from(elemento.querySelectorAll('img')).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});})));const blob=await janela.html2pdf().set(config).from(elemento).outputPdf('blob');
     const arquivo=new File([blob],nome,{type:'application/pdf'});
-    if(compartilhar&&navigator.share&&navigator.canShare&&navigator.canShare({files:[arquivo]})){
-     try{await navigator.share({files:[arquivo],title:'Relatório Cultivar Agro'});return;}catch(e){if(e.name==='AbortError')return;}
+    if(compartilhar){
+     const host=window;
+     if(host.navigator.share&&(!host.navigator.canShare||host.navigator.canShare({files:[arquivo]}))){
+      try{await host.navigator.share({files:[arquivo],title:'Relatório Cultivar Agro'});return;}
+      catch(e){if(e.name==='AbortError')return;console.warn('Compartilhamento indisponível, baixando PDF:',e);}
+     }
     }
     const url=URL.createObjectURL(blob);const link=janela.document.createElement('a');link.href=url;link.download=nome;janela.document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
     if(compartilhar)janela.alert('PDF baixado. Abra o arquivo e compartilhe pelo WhatsApp.');
