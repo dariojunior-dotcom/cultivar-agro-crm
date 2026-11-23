@@ -253,6 +253,8 @@ function pdfJanela(){
   janela.voltarAoCRM=function(event){if(event)event.preventDefault();document.getElementById('crmRelatorioOverlay')?.remove();go('visitas');return false;};
   janela.document.body.insertAdjacentHTML('afterbegin','<div id="voltarCRM" style="position:sticky;top:0;z-index:999;background:#fff;padding:12px 0;border-bottom:1px solid #d9e6dc"><a href="https://cultivar-agro-crm.vercel.app/#visitas" onclick="return voltarAoCRM(event)" style="display:inline-block;background:#17623f;color:white;text-decoration:none;border-radius:9px;padding:12px 16px;font-size:16px;font-weight:700;cursor:pointer">← Voltar às visitas</a></div>');
   const script=janela.document.createElement('script');script.src='https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';janela.document.head.appendChild(script);
+  const jspdfScript=janela.document.createElement('script');jspdfScript.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';janela.document.head.appendChild(jspdfScript);
+  janela.pdfLibPronta=new Promise((resolve,reject)=>{jspdfScript.onload=resolve;jspdfScript.onerror=()=>reject(Error('Não foi possível carregar o gerador de PDF. Verifique sua conexão.'));});
   janela.gerarArquivoPDF=async function(compartilhar){
    const botao=janela.document.activeElement;try{
     if(typeof janela.html2pdf!=='function')throw Error('Gerador de PDF ainda está carregando. Aguarde alguns segundos e tente novamente.');
@@ -263,7 +265,9 @@ function pdfJanela(){
     const config={margin:10,filename:nome,image:{type:'jpeg',quality:0.92},html2canvas:{scale:1.5,useCORS:true},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy'],before:'.foto-pdf',avoid:['.foto-pdf','.foto-pdf img','.foto-pdf figcaption']}};
     await Promise.all(Array.from(elemento.querySelectorAll('img')).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});})));
     let blob;
-    if(elemento.id==='pdfRelatorio'&&janela.jspdf&&janela.jspdf.jsPDF){
+    if(elemento.id==='pdfRelatorio'){
+     await janela.pdfLibPronta;
+     if(!janela.jspdf?.jsPDF)throw Error('Gerador de PDF indisponível. Atualize a página e tente novamente.');
      // Render the visit details as native PDF text and each photograph as one fitted A4 page.
      // Avoid html2pdf CSS page-break behavior, which can add a blank page and crop tall images.
      const pdf=new janela.jspdf.jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
@@ -307,7 +311,7 @@ function pdfJanela(){
     }
     const arquivo=new File([blob],nome,{type:'application/pdf'});
     if(compartilhar){
-     const host=window;
+     const host=window.parent!==window?window.parent:window;
      if(host.navigator.share&&(!host.navigator.canShare||host.navigator.canShare({files:[arquivo]}))){
       try{await host.navigator.share({files:[arquivo],title:'Relatório Cultivar Agro'});return;}
       catch(e){if(e.name==='AbortError')return;console.warn('Compartilhamento indisponível, baixando PDF:',e);}
