@@ -378,8 +378,8 @@ function pdfAbrirImpressao(janela,conteudo){
  const faixa=janela.document.getElementById('voltarCRM');
  const cabecalho=janela.document.querySelector('.relatorio-cabecalho');
  if(faixa&&cabecalho&&logoDestino){
-  faixa.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:999;background:white;padding:4px 0 6px;min-height:84px';
-  logoDestino.style.cssText='display:block;width:310px;max-width:58%;height:84px;object-fit:contain;object-position:center';
+  faixa.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:999;background:white;padding:4px 0 6px;min-height:120px';
+  logoDestino.style.cssText='display:block;width:440px;max-width:68%;height:120px;object-fit:contain;object-position:center';
   faixa.appendChild(logoDestino);
   cabecalho.style.cssText='display:flex;flex-direction:column;align-items:center;gap:2px;border-bottom:2px solid #17623f;padding:0 0 9px;margin-bottom:9px;text-align:center';
  }
