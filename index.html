@@ -261,7 +261,46 @@ function pdfJanela(){
     if(!elemento)throw Error('Relatório indisponível.');
     const nome='Cultivar_Agro_Relatorio_'+new Date().toISOString().slice(0,10)+'.pdf';
     const config={margin:10,filename:nome,image:{type:'jpeg',quality:0.92},html2canvas:{scale:1.5,useCORS:true},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy'],before:'.foto-pdf',avoid:['.foto-pdf','.foto-pdf img','.foto-pdf figcaption']}};
-    await Promise.all(Array.from(elemento.querySelectorAll('img')).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});})));const blob=await janela.html2pdf().set(config).from(elemento).outputPdf('blob');
+    await Promise.all(Array.from(elemento.querySelectorAll('img')).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});})));
+    let blob;
+    if(elemento.id==='pdfRelatorio'&&janela.jspdf&&janela.jspdf.jsPDF){
+     // Render the visit details as native PDF text and each photograph as one fitted A4 page.
+     // Avoid html2pdf CSS page-break behavior, which can add a blank page and crop tall images.
+     const pdf=new janela.jspdf.jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
+     const margin=15,pageW=210,pageH=297,usableW=pageW-2*margin;
+     let y=20;
+     const line=(value,bold=false)=>{
+      pdf.setFont('helvetica',bold?'bold':'normal');pdf.setFontSize(bold?12:10);
+      const rows=pdf.splitTextToSize(String(value||'—'),usableW);
+      for(const row of rows){if(y>pageH-18){pdf.addPage();y=20;}pdf.text(row,margin,y);y+=bold?7:5.5;}
+      y+=2;
+     };
+     line('CULTIVAR AGRO — RELATÓRIO DE VISITA',true);
+     const tabela=elemento.querySelector('table');
+     if(tabela)for(const tr of tabela.querySelectorAll('tr')){
+      const th=tr.querySelector('th'),td=tr.querySelector('td');
+      if(th&&td)line(th.textContent.trim()+': '+td.textContent.trim());
+     }
+     const fotos=Array.from(elemento.querySelectorAll('.foto-pdf img'));
+     for(let i=0;i<fotos.length;i++){
+      const img=fotos[i];
+      if(!img.complete||!img.naturalWidth)continue;
+      pdf.addPage();
+      pdf.setFont('helvetica','bold');pdf.setFontSize(11);
+      pdf.text('Foto '+(i+1)+' de '+fotos.length,margin,18);
+      const maxW=180,maxH=250;
+      const ratio=Math.min(maxW/img.naturalWidth,maxH/img.naturalHeight);
+      const w=img.naturalWidth*ratio,h=img.naturalHeight*ratio;
+      const x=(pageW-w)/2,top=24+(maxH-h)/2;
+      const fmt=/^data:image\/png/i.test(img.src)?'PNG':'JPEG';
+      pdf.addImage(img.src,fmt,x,top,w,h,undefined,'FAST');
+      const legenda=img.closest('figure')?.querySelector('figcaption')?.textContent||'';
+      if(legenda){pdf.setFont('helvetica','normal');pdf.setFontSize(9);pdf.text(pdf.splitTextToSize(legenda,usableW),margin,282);}
+     }
+     blob=pdf.output('blob');
+    }else{
+     blob=await janela.html2pdf().set(config).from(elemento).outputPdf('blob');
+    }
     const arquivo=new File([blob],nome,{type:'application/pdf'});
     if(compartilhar){
      const host=window;
