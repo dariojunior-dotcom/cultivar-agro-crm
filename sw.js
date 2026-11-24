@@ -1,15 +1,24 @@
-/* Cultivar Agro: somente cache da interface, nunca de dados privados ou APIs. */
-const CACHE='cultivar-shell-v4';
-const SHELL=['./','./index.html','./offline.js','./manifest.webmanifest','./icons/cultivar.svg'];
-self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()))});
-self.addEventListener('activate',event=>{event.waitUntil(Promise.all([caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))),self.clients.claim()]))});
+/* Cultivar Agro: cache da interface, nunca de APIs ou dados privados. */
+const CACHE='cultivar-shell-v5';
+const SHELL=['./','./index.html','./offline.js','./manifest.webmanifest','./icons/cultivar.svg','./Cultivar_logo.png'];
+const LIBS=['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js','https://unpkg.com/leaflet@1.9.4/dist/leaflet.js','https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'];
+self.addEventListener('install',event=>event.waitUntil((async()=>{
+ const cache=await caches.open(CACHE);
+ await cache.addAll(SHELL);
+ await Promise.all(LIBS.map(url=>cache.add(new Request(url,{mode:'cors'}))));
+ await self.skipWaiting();
+})()));
+self.addEventListener('activate',event=>event.waitUntil((async()=>{
+ await Promise.all((await caches.keys()).filter(k=>k.startsWith('cultivar-shell-')&&k!==CACHE).map(k=>caches.delete(k)));
+ await self.clients.claim();
+})()));
 self.addEventListener('fetch',event=>{
- const req=event.request;
- if(req.method!=='GET')return;
- const asset=req.url.includes('unpkg.com/leaflet@1.9.4/dist/leaflet.')||req.url.includes('cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js');
- if(asset){event.respondWith(caches.open(CACHE).then(async cache=>{try{const response=await fetch(req);if(response.ok||response.type==='opaque')cache.put(req,response.clone()).catch(()=>{});return response}catch(e){const cached=await cache.match(req);if(cached)return cached;throw e}}));return}
- if(req.mode!=='navigate')return;
+ const req=event.request;if(req.method!=='GET')return;
  const url=new URL(req.url);
- if(url.origin!==self.location.origin)return;
- event.respondWith(fetch(req).then(response=>{if(response.ok){const copy=response.clone();caches.open(CACHE).then(c=>c.put('./index.html',copy)).catch(()=>{})}return response}).catch(()=>caches.match('./index.html')));
+ const local=url.origin===self.location.origin;
+ if(local&&req.mode==='navigate'){
+ event.respondWith((async()=>{const c=await caches.open(CACHE);try{const r=await fetch(req);if(r.ok&&r.headers.get('content-type')?.includes('text/html'))await c.put('./index.html',r.clone());return r}catch(e){return await c.match('./index.html')||Response.error()}})());return;
+ }
+ const asset=LIBS.includes(req.url)||(local&&SHELL.some(p=>new URL(p,self.registration.scope).pathname===url.pathname));
+ if(asset)event.respondWith((async()=>{const c=await caches.open(CACHE);try{const r=await fetch(req);if(r.ok||r.type==='opaque')await c.put(req,r.clone());return r}catch(e){return await c.match(req,{ignoreSearch:true})||Response.error()}})());
 });
