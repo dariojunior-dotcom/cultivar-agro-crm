@@ -27,7 +27,9 @@ function go(t){tab=t;render();if(t==='clientes')loadClientesSupabase();if(t==='f
 async function carregarPainelReal(){
  if(!sb||!perfilAtual)return;
  painelDados.carregando=true;painelDados.erro='';if(tab==='dashboard')render();
+ const uid=perfilAtual.id;
  try{
+  if(!navigator.onLine)throw Error('Offline');
   const [c,f,v,p,vd,m,o]=await Promise.all([
    sb.from('clientes').select('id,vendedor_id,nome'),
    sb.from('fazendas').select('id,vendedor_id'),
@@ -45,7 +47,8 @@ async function carregarPainelReal(){
   const equipe=(p.data||[]).filter(x=>['vendedor','seller'].includes(String(x.papel||x.role||x.tipo||'').toLowerCase())&&x.ativo!==false&&x.active!==false);
   painelDados.porVendedor=equipe.map(x=>({id:x.id,nome:x.nome||x.name||'Vendedor',clientes:(c.data||[]).filter(y=>y.vendedor_id===x.id).length,visitas:(v.data||[]).filter(y=>y.vendedor_id===x.id).length,vendas:painelDados.vendas.filter(y=>y.vendedor_id===x.id).reduce((a,y)=>a+Number(y.valor||0),0),metas:painelDados.metas.filter(y=>y.vendedor_id===x.id).reduce((a,y)=>a+Number(y.valor||0),0)}));
   painelDados.erro='';
- }catch(e){painelDados.erro=e.message||String(e)}
+  if(window.CultivarOffline)await CultivarOffline.cache(uid,'painel',{...painelDados,carregando:false}).catch(console.warn);
+ }catch(e){const snap=await window.CultivarOffline?.cached(uid,'painel').catch(()=>null);if(perfilAtual?.id===uid){if(snap)Object.assign(painelDados,snap,{erro:''});else painelDados.erro='Sem painel salvo neste aparelho. Abra o painel com internet para preparar o acesso offline.';}}
  finally{painelDados.carregando=false;if(tab==='dashboard')render()}
 }
 let filtroPainelMes='',filtroPainelVendedor='';
@@ -765,10 +768,18 @@ function clientesSupabase(){
 async function loadClientesSupabase(){
  if(!sb||!perfilAtual)return;
  clientesCarregando=true;clientesErro='';if(tab==='clientes')render();
+ const uid=perfilAtual.id;
+ try{
+ if(!navigator.onLine)throw Error('Offline');
  const [{data,error},equipe]=await Promise.all([sb.from('clientes').select('id,vendedor_id,nome,cpf_cnpj,telefone,municipio,uf,observacoes,criado_em').order('criado_em',{ascending:false}),user==='gestor'?sb.from('profiles').select('*'):Promise.resolve({data:[]})]);
  if(user==='gestor'&&!equipe.error)clientesEquipe=(equipe.data||[]).filter(p=>p.ativo!==false&&p.active!==false);
  clientesCarregando=false;
  if(error){clientesErro='Erro ao carregar: '+error.message;clientesReais=[]}else clientesReais=data||[];
+
+ if(clientesErro)throw Error(clientesErro);
+ if(window.CultivarOffline)await CultivarOffline.cache(uid,'clientes',{clientesReais,clientesEquipe}).catch(console.warn);
+ }catch(e){const snap=await window.CultivarOffline?.cached(uid,'clientes').catch(()=>null);if(perfilAtual?.id===uid){clientesReais=snap?.clientesReais||[];clientesEquipe=snap?.clientesEquipe||[];clientesErro=snap?'':'Sem dados salvos neste aparelho. Abra esta aba com internet primeiro.';}}
+ clientesCarregando=false;
  if(tab==='clientes')render();
 }
 async function salvarClienteSupabase(event){
@@ -814,9 +825,17 @@ function fazendasSupabase(){
 async function loadFazendasSupabase(){
  if(!sb||!perfilAtual)return;
  fazendasCarregando=true;fazendasErro='';if(tab==='fazendas')render();
+ const uid=perfilAtual.id;
+ try{
+ if(!navigator.onLine)throw Error('Offline');
  const [c,f]=await Promise.all([sb.from('clientes').select('id,nome,municipio,vendedor_id').order('nome'),sb.from('fazendas').select('id,cliente_id,vendedor_id,nome,gerente,municipio,area_total_ha,latitude,longitude,criado_em').order('criado_em',{ascending:false})]);
  fazendasCarregando=false;fazendasClientes=c.error?[]:c.data||[];fazendasReais=f.error?[]:f.data||[];
  if(c.error||f.error)fazendasErro='Erro ao carregar: '+(c.error?.message||f.error?.message);
+
+ if(fazendasErro)throw Error(fazendasErro);
+ if(window.CultivarOffline)await CultivarOffline.cache(uid,'fazendas',{fazendasReais,fazendasClientes}).catch(console.warn);
+ }catch(e){const snap=await window.CultivarOffline?.cached(uid,'fazendas').catch(()=>null);if(perfilAtual?.id===uid){fazendasReais=snap?.fazendasReais||[];fazendasClientes=snap?.fazendasClientes||[];fazendasErro=snap?'':'Sem dados salvos neste aparelho. Abra esta aba com internet primeiro.';}}
+ fazendasCarregando=false;
  if(tab==='fazendas')render();
 }
 async function salvarFazendaSupabase(event){
