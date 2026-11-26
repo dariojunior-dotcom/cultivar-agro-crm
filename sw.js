@@ -1,11 +1,11 @@
 /* Cultivar Agro: cache da interface, nunca de APIs ou dados privados. */
-const CACHE='cultivar-shell-v5';
+const CACHE='cultivar-shell-v6';
 const SHELL=['./','./index.html','./offline.js','./manifest.webmanifest','./icons/cultivar.svg','./Cultivar_logo.png'];
 const LIBS=['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js','https://unpkg.com/leaflet@1.9.4/dist/leaflet.js','https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'];
 self.addEventListener('install',event=>event.waitUntil((async()=>{
  const cache=await caches.open(CACHE);
  await cache.addAll(SHELL);
- await Promise.all(LIBS.map(url=>cache.add(new Request(url,{mode:'cors'}))));
+ await Promise.allSettled(LIBS.map(url=>cache.add(new Request(url,{mode:'cors'}))));
  await self.skipWaiting();
 })()));
 self.addEventListener('activate',event=>event.waitUntil((async()=>{
