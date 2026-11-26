@@ -1,5 +1,5 @@
 /* Cultivar Agro: cache da interface, nunca de APIs ou dados privados. */
-const CACHE='cultivar-shell-v9';
+const CACHE='cultivar-shell-v10';
 const SHELL=['./','./index.html','./offline.js','./manifest.webmanifest','./icons/cultivar.svg','./Cultivar_logo.png'];
 const LIBS=['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js','https://unpkg.com/leaflet@1.9.4/dist/leaflet.js','https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'];
 self.addEventListener('install',event=>event.waitUntil((async()=>{
