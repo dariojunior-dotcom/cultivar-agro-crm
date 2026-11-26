@@ -874,7 +874,7 @@ async function renovarAutorizacaoOffline(){
  const authorization={id:uid,email:account.email,expires:Date.now()+7*86400000};await CultivarOffline.cache('device','authorization',authorization);localStorage.setItem(OFFLINE_AUTH,JSON.stringify(authorization));
 }
 async function resumeOffline(){let a=offlineAccount();if(!a&&window.CultivarOffline){const saved=await CultivarOffline.cached('device','authorization').catch(()=>null);if(saved?.id&&saved.expires>Date.now()){localStorage.setItem(OFFLINE_AUTH,JSON.stringify(saved));a=saved;}}if(!a)throw Error('Autorização offline ausente ou expirada. Entre com internet neste mesmo navegador, sem clicar em Sair.');await showAuthenticated(a,true);}
-function atualizarStatusOffline(){const el=document.getElementById('offlineStatus');if(!el)return;const a=offlineAccount();el.textContent=a?'V9 • Autorização local válida até '+new Date(a.expires).toLocaleString('pt-BR'):'V9 • Nenhuma autorização offline válida neste navegador.';}
+function atualizarStatusOffline(){const el=document.getElementById('offlineStatus');if(!el)return;const a=offlineAccount();el.textContent=a?'V10 • Autorização local válida até '+new Date(a.expires).toLocaleString('pt-BR'):'V10 • Nenhuma autorização offline válida neste navegador.';}
 
 async function loginReal(event){
  event.preventDefault();
@@ -912,16 +912,16 @@ async function showAuthenticated(account,offline=false){
   if(['gestor','admin','administrador'].includes(role))user='gestor';
   else if(['vendedor','seller'].includes(role))user='v1';
   else throw new Error('Perfil sem função autorizada.');
-  if(!offline&&navigator.onLine){const authorization={id:account.id,email:account.email,expires:Date.now()+7*86400000};await CultivarOffline.cache('device','authorization',authorization);localStorage.setItem(OFFLINE_AUTH,JSON.stringify(authorization));}
- }catch(e){if(!offlineNetworkError(e)&&!offline){localStorage.removeItem(OFFLINE_AUTH);await sb.auth.signOut({scope:'local'}).catch(()=>{});}throw new Error('Acesso não liberado: '+(e.message||'verifique seu perfil no Supabase'))}
+  if(!offline){const authorization={id:account.id,email:account.email,expires:Date.now()+7*86400000};await CultivarOffline.cache('device','authorization',authorization);localStorage.setItem(OFFLINE_AUTH,JSON.stringify(authorization));const check=await CultivarOffline.cached('device','authorization');if(check?.id!==account.id||offlineAccount()?.id!==account.id)throw Error('Não foi possível confirmar a gravação da autorização local.');}
+ }catch(e){if(!offline&&/Perfil de acesso não encontrado ou inativo|Perfil sem função autorizada/.test(e.message||'')){await logout();}throw new Error('Acesso não liberado: '+(e.message||'verifique seu perfil no Supabase'))}
  document.getElementById('login').classList.add('hidden');
  document.getElementById('app').classList.remove('hidden');
  document.getElementById('identity').textContent=account.email;
  tab='dashboard';render();carregarPainelReal();if(navigator.onLine)sincronizarPendencias(true);
- document.getElementById('identity').textContent=account.email+' • '+(user==='gestor'?'Gestor':'Vendedor');
+ document.getElementById('identity').textContent=account.email+' • '+(user==='gestor'?'Gestor':'Vendedor')+' • V10 • '+(offline?'Offline':offlineAccount()?'Offline autorizado até '+new Date(offlineAccount().expires).toLocaleString('pt-BR'):'Offline não autorizado');
 }
 const offlineButton=document.createElement('button');offlineButton.type='button';offlineButton.textContent='Continuar offline neste aparelho';offlineButton.style.cssText='width:100%;margin-top:8px';offlineButton.onclick=async()=>{try{await resumeOffline()}catch(e){authMessage.textContent=e.message}};document.getElementById('loginButton').after(offlineButton);const offlineStatus=document.createElement('p');offlineStatus.id='offlineStatus';offlineStatus.className='muted';offlineButton.after(offlineStatus);atualizarStatusOffline();
-(async()=>{try{if(!navigator.onLine||!sb){await resumeOffline();return}const {data,error}=await sb.auth.getUser();if(error){if(offlineNetworkError(error))await resumeOffline();else if(error.status===401||error.status===403){localStorage.removeItem(OFFLINE_AUTH);await window.CultivarOffline?.cache('device','authorization',null);}return}if(data?.user)await showAuthenticated(data.user);else atualizarStatusOffline();}catch(e){authMessage.textContent=e.message}finally{atualizarStatusOffline()}})();
+(async()=>{try{if(!navigator.onLine||!sb){await resumeOffline();return}const {data,error}=await sb.auth.getUser();if(error){if(offlineNetworkError(error))await resumeOffline();else if(error.status===401||error.status===403){authMessage.textContent='Sessão online encerrada. Entre novamente com internet.';}return}if(data?.user)await showAuthenticated(data.user);else atualizarStatusOffline();}catch(e){authMessage.textContent=e.message}finally{atualizarStatusOffline()}})();
 
 if('serviceWorker' in navigator && location.protocol==='https:'){navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('Cache offline indisponível',err))}
 </script></body></html>
